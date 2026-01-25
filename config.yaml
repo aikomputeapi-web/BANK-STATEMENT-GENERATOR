@@ -1,0 +1,36 @@
+# Wells Fargo Bank Statement Generator Configuration
+# Edit this file with your details before running generator.py
+
+account_holder:
+  name: "MATTHEW DAHLGREN"
+  address:
+    street: "7052 SANTA TERESA BLVD"
+    city: "SAN JOSE"
+    state: "CA"
+    zip: "95139"
+
+account_info:
+  account_number: "3628955821"
+  routing_number: "021200025"
+  account_type: "Wells Fargo Business Checking"
+
+statement_period:
+  # Set to "auto" for last 90 days, or specify dates in YYYY-MM-DD format
+  mode: "manual"  # Options: "auto" or "manual"
+  start_date: "2025-10-1"  # Used only if mode is "manual"
+  end_date: "2025-10-31"    # Used only if mode is "manual"
+
+business_profile:
+  # Monthly revenue for realistic transaction generation
+  monthly_revenue: 100000
+  business_type: "retail"  # Options: retail, restaurant, service
+  
+  # Starting balance range (will be randomized within this range)
+  starting_balance_min: 15000
+  starting_balance_max: 50000
+
+output:
+  # Output directory for generated statements
+  directory: "output"
+  # Filename pattern (date will be appended)
+  filename_prefix: "wells_fargo_statement"
