@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Statement Generator - Browser Edition</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <style>
+        :root {
+            --wf-red: #cd1409;
+            --wf-yellow: #ffcd00;
+            --wf-dark-red: #9b0000;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text-light: #eaeaea;
+            --text-muted: #a0a0a0;
+            --border-color: #2a2a4a;
+            --success-green: #00c853;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #0f0f23 100%);
+            min-height: 100vh;
+            color: var(--text-light);
+            padding: 20px;
+        }
+
+        .container { max-width: 900px; margin: 0 auto; }
+
+        .header { text-align: center; margin-bottom: 30px; padding: 20px; }
+        .header h1 { font-size: 1.8rem; font-weight: 600; margin-bottom: 5px; }
+        .header p { color: var(--text-muted); font-size: 0.95rem; }
+
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #0f0f23 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.hidden { display: none; }
+
+        .loading-spinner {
+            width: 60px; height: 60px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--wf-red);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text { color: var(--text-light); font-size: 1.1rem; }
+        .loading-subtext { color: var(--text-muted); font-size: 0.9rem; margin-top: 10px; }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px; padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; color: var(--wf-yellow); }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 15px;
+        }
+
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label {
+            font-size: 0.8rem; color: var(--text-muted);
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+
+        .form-group input, .form-group select {
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: var(--wf-yellow);
+        }
+
+        .btn {
+            padding: 12px 24px; border: none; border-radius: 8px;
+            font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--wf-red) 0%, var(--wf-dark-red) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover { transform: translateY(-2px); }
+
+        .btn-mock {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white; font-size: 0.8rem; padding: 8px 16px;
+        }
+
+        .generate-section { text-align: center; padding: 30px; }
+        .generate-btn { font-size: 1.1rem; padding: 16px 48px; }
+
+        .result-card {
+            display: none;
+            background: linear-gradient(135deg, rgba(0, 200, 83, 0.1) 0%, rgba(0, 200, 83, 0.05) 100%);
+            border-color: var(--success-green);
+        }
+
+        .result-card.visible { display: block; animation: slideIn 0.3s ease; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px; margin: 20px 0;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px; border-radius: 8px; text-align: center;
+        }
+
+        .stat-box .value { font-size: 1.3rem; font-weight: 700; color: var(--success-green); }
+        .stat-box .label { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; }
+
+        .download-btn {
+            background: linear-gradient(135deg, var(--success-green) 0%, #00a843 100%);
+            color: white; text-decoration: none; margin: 5px;
+        }
+
+        .money-input { position: relative; }
+        .money-input::before {
+            content: '$'; position: absolute; left: 15px; top: 50%;
+            transform: translateY(-50%); color: var(--text-muted); z-index: 1;
+        }
+        .money-input input { padding-left: 30px; }
+
+        .period-toggle {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 8px; margin-bottom: 15px;
+        }
+
+        .period-toggle button {
+            padding: 10px 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+        }
+
+        .period-toggle button.active {
+            background: var(--wf-red); color: white; border-color: var(--wf-red);
+        }
+
+        .browser-notice {
+            background: rgba(255, 205, 0, 0.1);
+            border: 1px solid var(--wf-yellow);
+            color: var(--wf-yellow);
+            padding: 15px; border-radius: 8px;
+            margin-bottom: 20px; text-align: center;
+        }
+
+        .error-message {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff4444;
+            color: #ff6666;
+            padding: 15px; border-radius: 8px;
+            margin-top: 15px; display: none;
+        }
+
+        .error-message.visible { display: block; }
+
+        .downloads-list {
+            display: flex; flex-wrap: wrap; justify-content: center;
+            gap: 10px; margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading Python Environment...</div>
+        <div class="loading-subtext" id="loading-status">Initializing Pyodide...</div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🏦 Bank Statement Generator</h1>
+            <p>Generate realistic bank statements entirely in your browser</p>
+        </div>
+
+        <div class="browser-notice">
+            ⚡ This app runs entirely in your browser using Python (Pyodide). No server required!
+            <br><small>Note: PDF generation may take a few seconds.</small>
+        </div>
+
+        <!-- Account Holder -->
+        <div class="card">
+            <div class="card-header">
+                <h2>👤 Account Holder</h2>
+                <button class="btn btn-mock" onclick="generateMockData()">🎲 Fill with Mock Data</button>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Full Name</label>
+                    <input type="text" id="name" placeholder="JOHN DOE">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Street Address</label>
+                    <input type="text" id="street" placeholder="123 MAIN ST APT 4">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" id="city" value="SAN JOSE">
+                </div>
+                <div class="form-group">
+                    <label>State</label>
+                    <input type="text" id="state" value="CA" maxlength="2">
+                </div>
+                <div class="form-group">
+                    <label>ZIP Code</label>
+                    <input type="text" id="zip" value="95110" maxlength="10">
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Info -->
+        <div class="card">
+            <div class="card-header">
+                <h2>🔢 Account Information</h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account Number</label>
+                    <input type="text" id="account_number" value="">
+                </div>
+                <div class="form-group">
+                    <label>Routing Number</label>
+                    <input type="text" id="routing_number" value="121042882">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Account Type</label>
+                    <select id="account_type">
+                        <option value="Wells Fargo Everyday Checking">Wells Fargo Everyday Checking</option>
+                        <option value="Wells Fargo Business Checking">Wells Fargo Business Checking</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statement Period -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📅 Statement Period</h2>
+            </div>
+            <div class="period-toggle">
+                <button id="btn-1month" class="active" onclick="setPeriodMode('1month')">1 Month</button>
+                <button id="btn-2months" onclick="setPeriodMode('2months')">2 Months</button>
+                <button id="btn-3months" onclick="setPeriodMode('3months')">3 Months</button>
+                <button id="btn-manual" onclick="setPeriodMode('manual')">Custom</button>
+            </div>
+            <div class="form-row" id="date-fields" style="display: none;">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="start_date">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" id="end_date">
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Profile -->
+        <div class="card">
+            <div class="card-header">
+                <h2>💼 Business Profile</h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Monthly Revenue</label>
+                    <div class="money-input">
+                        <input type="text" id="monthly_revenue" value="100,000" oninput="formatMoney(this)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Business Type</label>
+                    <select id="business_type">
+                        <option value="retail">Retail</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="service">Service</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Starting Balance (Min)</label>
+                    <div class="money-input">
+                        <input type="text" id="starting_balance_min" value="15,000" oninput="formatMoney(this)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Starting Balance (Max)</label>
+                    <div class="money-input">
+                        <input type="text" id="starting_balance_max" value="50,000" oninput="formatMoney(this)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Button -->
+        <div class="card generate-section">
+            <button class="btn btn-primary generate-btn" onclick="generateStatement()" id="generate-btn">
+                📄 Generate Statement
+            </button>
+            <div class="error-message" id="error-message"></div>
+        </div>
+
+        <!-- Result Card -->
+        <div class="card result-card" id="result-card">
+            <div class="card-header">
+                <h2>✅ Statement Generated Successfully!</h2>
+            </div>
+            <div class="result-summary" id="result-summary"></div>
+            <div class="downloads-list" id="downloads-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let pyodide = null;
+        let periodMode = '1month';
+
+        // Initialize Pyodide
+        async function initPyodide() {
+            const status = document.getElementById('loading-status');
+            
+            status.textContent = 'Loading Pyodide runtime...';
+            pyodide = await loadPyodide();
+            
+            status.textContent = 'Installing required packages...';
+            await pyodide.loadPackage(['micropip']);
+            
+            const micropip = pyodide.pyimport('micropip');
+            
+            status.textContent = 'Installing reportlab...';
+            await micropip.install('reportlab');
+            
+            status.textContent = 'Installing faker...';
+            await micropip.install('faker');
+            
+            status.textContent = 'Setting up generator...';
+            
+            // Initialize Python code
+            await pyodide.runPythonAsync(`
+import random
+from datetime import date, timedelta
+import calendar
+from io import BytesIO
+import base64
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, HRFlowable
+from reportlab.pdfgen import canvas
+from faker import Faker
+
+fake = Faker()
+
+# Transaction templates
+DEPOSIT_TEMPLATES = [
+    ("ATM Cash Deposit", (500, 3000)),
+    ("POS Deposit", (800, 5000)),
+    ("Square Inc Deposit", (1500, 8000)),
+    ("Stripe Transfer", (2000, 10000)),
+    ("PayPal Transfer", (500, 3000)),
+    ("Credit Card Settlement", (2000, 8000)),
+    ("Mobile Deposit", (200, 1500)),
+]
+
+WITHDRAWAL_TEMPLATES = [
+    ("Purchase authorized", (100, 2500)),
+    ("ACH Debit", (500, 5000)),
+    ("ADP Payroll", (3000, 8000)),
+    ("Rent Payment", (3000, 8000)),
+    ("PG&E Payment", (150, 500)),
+    ("Verizon Business", (100, 300)),
+    ("Amazon Business", (50, 500)),
+    ("Progressive Insurance", (200, 500)),
+]
+
+LOCATIONS = ["San Jose CA", "Santa Clara CA", "Sunnyvale CA", "Mountain View CA", "Cupertino CA"]
+
+def generate_mock_person():
+    streets = ["123 MAIN ST", "456 OAK AVE", "789 MAPLE DR", "1010 TECH BLVD"]
+    cities = [("SAN JOSE", "CA", "95110"), ("SANTA CLARA", "CA", "95050"), ("SUNNYVALE", "CA", "94086")]
+    name = fake.name().upper()
+    street = random.choice(streets)
+    city, state, zip_code = random.choice(cities)
+    return {"name": name, "street": street, "city": city, "state": state, "zip": zip_code}
+
+def get_month_range(year, month):
+    first_day = date(year, month, 1)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+    return first_day, last_day
+
+def get_previous_months(num_months):
+    today = date.today()
+    if today.month == 1:
+        year, month = today.year - 1, 12
+    else:
+        year, month = today.year, today.month - 1
+    
+    months = []
+    for i in range(num_months):
+        first_day, last_day = get_month_range(year, month)
+        months.append((first_day, last_day))
+        if month == 1:
+            year -= 1
+            month = 12
+        else:
+            month -= 1
+    return list(reversed(months))
+
+def generate_transactions(start_date, end_date, monthly_revenue, starting_balance):
+    transactions = []
+    days = (end_date - start_date).days
+    months = max(1, days / 30)
+    
+    # Generate deposits
+    target_revenue = monthly_revenue * months
+    current_total = 0
+    while current_total < target_revenue * 0.95:
+        template, (min_amt, max_amt) = random.choice(DEPOSIT_TEMPLATES)
+        remaining = target_revenue - current_total
+        max_amt = min(max_amt, remaining * 0.3)
+        if max_amt < min_amt:
+            break
+        amount = round(random.uniform(min_amt, max_amt), 2)
+        days_offset = random.randint(0, days)
+        txn_date = start_date + timedelta(days=days_offset)
+        location = random.choice(LOCATIONS)
+        transactions.append({
+            'date': txn_date,
+            'description': f"{template} {location}",
+            'amount': amount,
+            'type': 'deposit'
+        })
+        current_total += amount
+    
+    # Generate withdrawals
+    expense_ratio = random.uniform(0.70, 0.85)
+    target_expenses = monthly_revenue * months * expense_ratio
+    current_expenses = 0
+    while current_expenses < target_expenses * 0.95:
+        template, (min_amt, max_amt) = random.choice(WITHDRAWAL_TEMPLATES)
+        remaining = target_expenses - current_expenses
+        max_amt = min(max_amt, remaining * 0.2)
+        if max_amt < min_amt:
+            break
+        amount = round(random.uniform(min_amt, max_amt), 2)
+        days_offset = random.randint(0, days)
+        txn_date = start_date + timedelta(days=days_offset)
+        transactions.append({
+            'date': txn_date,
+            'description': template,
+            'amount': amount,
+            'type': 'withdrawal'
+        })
+        current_expenses += amount
+    
+    # Sort and calculate running balance
+    transactions.sort(key=lambda t: t['date'])
+    balance = starting_balance
+    for txn in transactions:
+        if txn['type'] == 'deposit':
+            balance += txn['amount']
+        else:
+            balance -= txn['amount']
+        txn['balance'] = round(balance, 2)
+    
+    return transactions, balance
+
+def generate_pdf(name, street, city, state, zip_code, account_number, routing_number, 
+                 account_type, start_date, end_date, transactions, starting_balance):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=0.5*inch, rightMargin=0.5*inch,
+                           topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle('Title2', parent=styles['Heading1'], fontSize=16, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle('Small', parent=styles['Normal'], fontSize=7, leading=9))
+    styles.add(ParagraphStyle('Section', parent=styles['Heading2'], fontSize=11, fontName='Helvetica-Bold'))
+    
+    story = []
+    
+    # Header
+    title = Paragraph(account_type, styles['Title2'])
+    date_text = Paragraph(f"{end_date.strftime('%B %d, %Y')}", styles['Normal'])
+    story.append(title)
+    story.append(date_text)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Customer info
+    story.append(Paragraph(name, styles['Normal']))
+    story.append(Paragraph(street, styles['Normal']))
+    story.append(Paragraph(f"{city} {state} {zip_code}", styles['Normal']))
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Summary
+    total_deposits = sum(t['amount'] for t in transactions if t['type'] == 'deposit')
+    total_withdrawals = sum(t['amount'] for t in transactions if t['type'] == 'withdrawal')
+    ending_balance = starting_balance + total_deposits - total_withdrawals
+    
+    story.append(Paragraph("<b>Statement Summary</b>", styles['Section']))
+    summary_data = [
+        [f'Beginning balance on {start_date.strftime("%m/%d")}', f'${starting_balance:,.2f}'],
+        ['Deposits/Additions', f'${total_deposits:,.2f}'],
+        ['Withdrawals/Subtractions', f'- ${total_withdrawals:,.2f}'],
+        [f'Ending balance on {end_date.strftime("%m/%d")}', f'${ending_balance:,.2f}'],
+    ]
+    summary_table = Table(summary_data, colWidths=[2.5*inch, 1.2*inch])
+    summary_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
+        ('LINEABOVE', (0, 3), (-1, 3), 0.5, colors.black),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Transactions
+    story.append(PageBreak())
+    story.append(Paragraph("<b>Transaction History</b>", styles['Section']))
+    
+    table_data = [['Date', 'Description', 'Deposits', 'Withdrawals', 'Balance']]
+    for txn in transactions:
+        row = [
+            txn['date'].strftime('%m/%d'),
+            txn['description'][:40],
+            f"{txn['amount']:,.2f}" if txn['type'] == 'deposit' else '',
+            f"{txn['amount']:,.2f}" if txn['type'] == 'withdrawal' else '',
+            f"{txn['balance']:,.2f}"
+        ]
+        table_data.append(row)
+    
+    txn_table = Table(table_data, colWidths=[0.5*inch, 3.5*inch, 0.9*inch, 0.9*inch, 0.9*inch], repeatRows=1)
+    txn_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.95, 0.95, 0.95)),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story.append(txn_table)
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return {
+        'pdf_base64': base64.b64encode(buffer.getvalue()).decode('utf-8'),
+        'beginning_balance': starting_balance,
+        'total_deposits': total_deposits,
+        'total_withdrawals': total_withdrawals,
+        'ending_balance': ending_balance,
+        'transaction_count': len(transactions)
+    }
+            `);
+            
+            // Generate random account number
+            document.getElementById('account_number').value = Math.floor(1000000000 + Math.random() * 9000000000);
+            
+            // Hide loading overlay
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        function setPeriodMode(mode) {
+            periodMode = mode;
+            document.querySelectorAll('.period-toggle button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-' + mode).classList.add('active');
+            document.getElementById('date-fields').style.display = mode === 'manual' ? 'grid' : 'none';
+        }
+
+        function formatMoney(input) {
+            let value = input.value.replace(/[^\d]/g, '');
+            if (value) value = parseInt(value).toLocaleString('en-US');
+            input.value = value;
+        }
+
+        function parseMoney(value) {
+            return parseFloat(value.replace(/,/g, '')) || 0;
+        }
+
+        async function generateMockData() {
+            const result = await pyodide.runPythonAsync(`generate_mock_person()`);
+            const data = result.toJs();
+            document.getElementById('name').value = data.get('name');
+            document.getElementById('street').value = data.get('street');
+            document.getElementById('city').value = data.get('city');
+            document.getElementById('state').value = data.get('state');
+            document.getElementById('zip').value = data.get('zip');
+        }
+
+        async function generateStatement() {
+            const btn = document.getElementById('generate-btn');
+            const errorEl = document.getElementById('error-message');
+            const resultCard = document.getElementById('result-card');
+            
+            resultCard.classList.remove('visible');
+            errorEl.classList.remove('visible');
+            btn.textContent = '⏳ Generating...';
+            btn.disabled = true;
+
+            try {
+                const formData = {
+                    name: document.getElementById('name').value.toUpperCase(),
+                    street: document.getElementById('street').value.toUpperCase(),
+                    city: document.getElementById('city').value.toUpperCase(),
+                    state: document.getElementById('state').value.toUpperCase(),
+                    zip: document.getElementById('zip').value,
+                    account_number: document.getElementById('account_number').value,
+                    routing_number: document.getElementById('routing_number').value,
+                    account_type: document.getElementById('account_type').value,
+                    monthly_revenue: parseMoney(document.getElementById('monthly_revenue').value),
+                    starting_balance_min: parseMoney(document.getElementById('starting_balance_min').value),
+                    starting_balance_max: parseMoney(document.getElementById('starting_balance_max').value),
+                };
+
+                // Determine number of months
+                let numMonths = 1;
+                if (periodMode === '2months') numMonths = 2;
+                else if (periodMode === '3months') numMonths = 3;
+
+                // Generate statements
+                const results = [];
+                let currentBalance = formData.starting_balance_min + Math.random() * (formData.starting_balance_max - formData.starting_balance_min);
+
+                for (let i = 0; i < numMonths; i++) {
+                    const result = await pyodide.runPythonAsync(`
+months = get_previous_months(${numMonths})
+start_date, end_date = months[${i}]
+transactions, ending_balance = generate_transactions(
+    start_date, end_date, ${formData.monthly_revenue}, ${currentBalance}
+)
+result = generate_pdf(
+    "${formData.name}", "${formData.street}", "${formData.city}", "${formData.state}", "${formData.zip}",
+    "${formData.account_number}", "${formData.routing_number}", "${formData.account_type}",
+    start_date, end_date, transactions, ${currentBalance}
+)
+result['period'] = start_date.strftime('%B %Y')
+result['ending_balance_raw'] = ending_balance
+result
+                    `);
+                    
+                    const data = result.toJs();
+                    currentBalance = data.get('ending_balance_raw');
+                    results.push({
+                        pdf_base64: data.get('pdf_base64'),
+                        period: data.get('period'),
+                        beginning_balance: data.get('beginning_balance'),
+                        total_deposits: data.get('total_deposits'),
+                        total_withdrawals: data.get('total_withdrawals'),
+                        ending_balance: data.get('ending_balance'),
+                        transaction_count: data.get('transaction_count')
+                    });
+                }
+
+                // Show results
+                let summaryHtml = '';
+                let downloadsHtml = '';
+                
+                if (results.length === 1) {
+                    const r = results[0];
+                    summaryHtml = `
+                        <div class="stat-box"><div class="value">$${r.beginning_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Beginning Balance</div></div>
+                        <div class="stat-box"><div class="value">$${r.total_deposits.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Total Deposits</div></div>
+                        <div class="stat-box"><div class="value">$${r.total_withdrawals.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Total Withdrawals</div></div>
+                        <div class="stat-box"><div class="value">$${r.ending_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Ending Balance</div></div>
+                        <div class="stat-box"><div class="value">${r.transaction_count}</div><div class="label">Transactions</div></div>
+                    `;
+                } else {
+                    const totalTxns = results.reduce((sum, r) => sum + r.transaction_count, 0);
+                    summaryHtml = `
+                        <div class="stat-box"><div class="value">${results.length}</div><div class="label">Statements</div></div>
+                        <div class="stat-box"><div class="value">${totalTxns}</div><div class="label">Total Transactions</div></div>
+                    `;
+                }
+                
+                results.forEach((r, idx) => {
+                    downloadsHtml += `<a href="data:application/pdf;base64,${r.pdf_base64}" download="statement_${r.period.replace(' ', '_')}.pdf" class="btn download-btn">📥 ${r.period}</a>`;
+                });
+                
+                document.getElementById('result-summary').innerHTML = summaryHtml;
+                document.getElementById('downloads-list').innerHTML = downloadsHtml;
+                resultCard.classList.add('visible');
+
+            } catch (error) {
+                errorEl.textContent = 'Error: ' + error.message;
+                errorEl.classList.add('visible');
+                console.error(error);
+            }
+
+            btn.textContent = '📄 Generate Statement';
+            btn.disabled = false;
+        }
+
+        // Initialize on page load
+        initPyodide();
+    </script>
+</body>
+</html>
