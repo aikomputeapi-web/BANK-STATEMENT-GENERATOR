@@ -216,7 +216,7 @@
 
         <div class="browser-notice">
             ⚡ This app runs entirely in your browser using Python (Pyodide). No server required!
-            <br><small>Note: PDF generation may take a few seconds.</small>
+            <br><small>Note: First load may take 30-60 seconds to download Python packages.</small>
         </div>
 
         <!-- Account Holder -->
@@ -357,32 +357,8 @@
         </div>
     </div>
 
-    <script>
-        let pyodide = null;
-        let periodMode = '1month';
-
-        // Initialize Pyodide
-        async function initPyodide() {
-            const status = document.getElementById('loading-status');
-            
-            status.textContent = 'Loading Pyodide runtime...';
-            pyodide = await loadPyodide();
-            
-            status.textContent = 'Installing required packages...';
-            await pyodide.loadPackage(['micropip']);
-            
-            const micropip = pyodide.pyimport('micropip');
-            
-            status.textContent = 'Installing reportlab...';
-            await micropip.install('reportlab');
-            
-            status.textContent = 'Installing faker...';
-            await micropip.install('faker');
-            
-            status.textContent = 'Setting up generator...';
-            
-            // Initialize Python code
-            await pyodide.runPythonAsync(`
+    <!-- Python code stored separately to avoid JS template literal issues -->
+    <script id="python-code" type="text/plain">
 import random
 from datetime import date, timedelta
 import calendar
@@ -393,13 +369,11 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, HRFlowable
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from faker import Faker
 
 fake = Faker()
 
-# Transaction templates
 DEPOSIT_TEMPLATES = [
     ("ATM Cash Deposit", (500, 3000)),
     ("POS Deposit", (800, 5000)),
@@ -415,7 +389,7 @@ WITHDRAWAL_TEMPLATES = [
     ("ACH Debit", (500, 5000)),
     ("ADP Payroll", (3000, 8000)),
     ("Rent Payment", (3000, 8000)),
-    ("PG&E Payment", (150, 500)),
+    ("PGE Payment", (150, 500)),
     ("Verizon Business", (100, 300)),
     ("Amazon Business", (50, 500)),
     ("Progressive Insurance", (200, 500)),
@@ -459,7 +433,6 @@ def generate_transactions(start_date, end_date, monthly_revenue, starting_balanc
     days = (end_date - start_date).days
     months = max(1, days / 30)
     
-    # Generate deposits
     target_revenue = monthly_revenue * months
     current_total = 0
     while current_total < target_revenue * 0.95:
@@ -474,13 +447,12 @@ def generate_transactions(start_date, end_date, monthly_revenue, starting_balanc
         location = random.choice(LOCATIONS)
         transactions.append({
             'date': txn_date,
-            'description': f"{template} {location}",
+            'description': template + " " + location,
             'amount': amount,
             'type': 'deposit'
         })
         current_total += amount
     
-    # Generate withdrawals
     expense_ratio = random.uniform(0.70, 0.85)
     target_expenses = monthly_revenue * months * expense_ratio
     current_expenses = 0
@@ -501,7 +473,6 @@ def generate_transactions(start_date, end_date, monthly_revenue, starting_balanc
         })
         current_expenses += amount
     
-    # Sort and calculate running balance
     transactions.sort(key=lambda t: t['date'])
     balance = starting_balance
     for txn in transactions:
@@ -512,6 +483,9 @@ def generate_transactions(start_date, end_date, monthly_revenue, starting_balanc
         txn['balance'] = round(balance, 2)
     
     return transactions, balance
+
+def format_money(amount):
+    return "${:,.2f}".format(amount)
 
 def generate_pdf(name, street, city, state, zip_code, account_number, routing_number, 
                  account_type, start_date, end_date, transactions, starting_balance):
@@ -526,30 +500,27 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
     
     story = []
     
-    # Header
     title = Paragraph(account_type, styles['Title2'])
-    date_text = Paragraph(f"{end_date.strftime('%B %d, %Y')}", styles['Normal'])
+    date_text = Paragraph(end_date.strftime('%B %d, %Y'), styles['Normal'])
     story.append(title)
     story.append(date_text)
     story.append(Spacer(1, 0.3*inch))
     
-    # Customer info
     story.append(Paragraph(name, styles['Normal']))
     story.append(Paragraph(street, styles['Normal']))
-    story.append(Paragraph(f"{city} {state} {zip_code}", styles['Normal']))
+    story.append(Paragraph(city + " " + state + " " + zip_code, styles['Normal']))
     story.append(Spacer(1, 0.3*inch))
     
-    # Summary
     total_deposits = sum(t['amount'] for t in transactions if t['type'] == 'deposit')
     total_withdrawals = sum(t['amount'] for t in transactions if t['type'] == 'withdrawal')
     ending_balance = starting_balance + total_deposits - total_withdrawals
     
     story.append(Paragraph("<b>Statement Summary</b>", styles['Section']))
     summary_data = [
-        [f'Beginning balance on {start_date.strftime("%m/%d")}', f'${starting_balance:,.2f}'],
-        ['Deposits/Additions', f'${total_deposits:,.2f}'],
-        ['Withdrawals/Subtractions', f'- ${total_withdrawals:,.2f}'],
-        [f'Ending balance on {end_date.strftime("%m/%d")}', f'${ending_balance:,.2f}'],
+        ['Beginning balance on ' + start_date.strftime("%m/%d"), format_money(starting_balance)],
+        ['Deposits/Additions', format_money(total_deposits)],
+        ['Withdrawals/Subtractions', '- ' + format_money(total_withdrawals)],
+        ['Ending balance on ' + end_date.strftime("%m/%d"), format_money(ending_balance)],
     ]
     summary_table = Table(summary_data, colWidths=[2.5*inch, 1.2*inch])
     summary_table.setStyle(TableStyle([
@@ -562,7 +533,6 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
     story.append(summary_table)
     story.append(Spacer(1, 0.3*inch))
     
-    # Transactions
     story.append(PageBreak())
     story.append(Paragraph("<b>Transaction History</b>", styles['Section']))
     
@@ -571,9 +541,9 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
         row = [
             txn['date'].strftime('%m/%d'),
             txn['description'][:40],
-            f"{txn['amount']:,.2f}" if txn['type'] == 'deposit' else '',
-            f"{txn['amount']:,.2f}" if txn['type'] == 'withdrawal' else '',
-            f"{txn['balance']:,.2f}"
+            "{:,.2f}".format(txn['amount']) if txn['type'] == 'deposit' else '',
+            "{:,.2f}".format(txn['amount']) if txn['type'] == 'withdrawal' else '',
+            "{:,.2f}".format(txn['balance'])
         ]
         table_data.append(row)
     
@@ -601,13 +571,45 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
         'ending_balance': ending_balance,
         'transaction_count': len(transactions)
     }
-            `);
+    </script>
+
+    <script>
+        let pyodide = null;
+        let periodMode = '1month';
+
+        async function initPyodide() {
+            const status = document.getElementById('loading-status');
             
-            // Generate random account number
-            document.getElementById('account_number').value = Math.floor(1000000000 + Math.random() * 9000000000);
-            
-            // Hide loading overlay
-            document.getElementById('loading-overlay').classList.add('hidden');
+            try {
+                status.textContent = 'Loading Pyodide runtime...';
+                pyodide = await loadPyodide();
+                
+                status.textContent = 'Installing required packages...';
+                await pyodide.loadPackage(['micropip']);
+                
+                const micropip = pyodide.pyimport('micropip');
+                
+                status.textContent = 'Installing reportlab...';
+                await micropip.install('reportlab');
+                
+                status.textContent = 'Installing faker...';
+                await micropip.install('faker');
+                
+                status.textContent = 'Setting up generator...';
+                
+                // Get Python code from hidden script tag
+                const pythonCode = document.getElementById('python-code').textContent;
+                await pyodide.runPythonAsync(pythonCode);
+                
+                // Generate random account number
+                document.getElementById('account_number').value = Math.floor(1000000000 + Math.random() * 9000000000);
+                
+                // Hide loading overlay
+                document.getElementById('loading-overlay').classList.add('hidden');
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                console.error('Pyodide init error:', error);
+            }
         }
 
         function setPeriodMode(mode) {
@@ -628,7 +630,7 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
         }
 
         async function generateMockData() {
-            const result = await pyodide.runPythonAsync(`generate_mock_person()`);
+            const result = await pyodide.runPythonAsync('generate_mock_person()');
             const data = result.toJs();
             document.getElementById('name').value = data.get('name');
             document.getElementById('street').value = data.get('street');
@@ -662,32 +664,26 @@ def generate_pdf(name, street, city, state, zip_code, account_number, routing_nu
                     starting_balance_max: parseMoney(document.getElementById('starting_balance_max').value),
                 };
 
-                // Determine number of months
                 let numMonths = 1;
                 if (periodMode === '2months') numMonths = 2;
                 else if (periodMode === '3months') numMonths = 3;
 
-                // Generate statements
                 const results = [];
                 let currentBalance = formData.starting_balance_min + Math.random() * (formData.starting_balance_max - formData.starting_balance_min);
 
                 for (let i = 0; i < numMonths; i++) {
-                    const result = await pyodide.runPythonAsync(`
-months = get_previous_months(${numMonths})
-start_date, end_date = months[${i}]
-transactions, ending_balance = generate_transactions(
-    start_date, end_date, ${formData.monthly_revenue}, ${currentBalance}
-)
-result = generate_pdf(
-    "${formData.name}", "${formData.street}", "${formData.city}", "${formData.state}", "${formData.zip}",
-    "${formData.account_number}", "${formData.routing_number}", "${formData.account_type}",
-    start_date, end_date, transactions, ${currentBalance}
-)
-result['period'] = start_date.strftime('%B %Y')
-result['ending_balance_raw'] = ending_balance
-result
-                    `);
+                    // Build Python code without template literals containing ${}
+                    const pythonGenCode = [
+                        'months = get_previous_months(' + numMonths + ')',
+                        'start_date, end_date = months[' + i + ']',
+                        'transactions, ending_balance = generate_transactions(start_date, end_date, ' + formData.monthly_revenue + ', ' + currentBalance + ')',
+                        'result = generate_pdf("' + formData.name + '", "' + formData.street + '", "' + formData.city + '", "' + formData.state + '", "' + formData.zip + '", "' + formData.account_number + '", "' + formData.routing_number + '", "' + formData.account_type + '", start_date, end_date, transactions, ' + currentBalance + ')',
+                        'result["period"] = start_date.strftime("%B %Y")',
+                        'result["ending_balance_raw"] = ending_balance',
+                        'result'
+                    ].join('\n');
                     
+                    const result = await pyodide.runPythonAsync(pythonGenCode);
                     const data = result.toJs();
                     currentBalance = data.get('ending_balance_raw');
                     results.push({
@@ -701,30 +697,29 @@ result
                     });
                 }
 
-                // Show results
                 let summaryHtml = '';
                 let downloadsHtml = '';
                 
                 if (results.length === 1) {
                     const r = results[0];
-                    summaryHtml = `
-                        <div class="stat-box"><div class="value">$${r.beginning_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Beginning Balance</div></div>
-                        <div class="stat-box"><div class="value">$${r.total_deposits.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Total Deposits</div></div>
-                        <div class="stat-box"><div class="value">$${r.total_withdrawals.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Total Withdrawals</div></div>
-                        <div class="stat-box"><div class="value">$${r.ending_balance.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="label">Ending Balance</div></div>
-                        <div class="stat-box"><div class="value">${r.transaction_count}</div><div class="label">Transactions</div></div>
-                    `;
+                    summaryHtml = '<div class="stat-box"><div class="value">$' + r.beginning_balance.toLocaleString('en-US', {minimumFractionDigits: 2}) + '</div><div class="label">Beginning Balance</div></div>' +
+                        '<div class="stat-box"><div class="value">$' + r.total_deposits.toLocaleString('en-US', {minimumFractionDigits: 2}) + '</div><div class="label">Total Deposits</div></div>' +
+                        '<div class="stat-box"><div class="value">$' + r.total_withdrawals.toLocaleString('en-US', {minimumFractionDigits: 2}) + '</div><div class="label">Total Withdrawals</div></div>' +
+                        '<div class="stat-box"><div class="value">$' + r.ending_balance.toLocaleString('en-US', {minimumFractionDigits: 2}) + '</div><div class="label">Ending Balance</div></div>' +
+                        '<div class="stat-box"><div class="value">' + r.transaction_count + '</div><div class="label">Transactions</div></div>';
                 } else {
-                    const totalTxns = results.reduce((sum, r) => sum + r.transaction_count, 0);
-                    summaryHtml = `
-                        <div class="stat-box"><div class="value">${results.length}</div><div class="label">Statements</div></div>
-                        <div class="stat-box"><div class="value">${totalTxns}</div><div class="label">Total Transactions</div></div>
-                    `;
+                    let totalTxns = 0;
+                    for (let j = 0; j < results.length; j++) {
+                        totalTxns += results[j].transaction_count;
+                    }
+                    summaryHtml = '<div class="stat-box"><div class="value">' + results.length + '</div><div class="label">Statements</div></div>' +
+                        '<div class="stat-box"><div class="value">' + totalTxns + '</div><div class="label">Total Transactions</div></div>';
                 }
                 
-                results.forEach((r, idx) => {
-                    downloadsHtml += `<a href="data:application/pdf;base64,${r.pdf_base64}" download="statement_${r.period.replace(' ', '_')}.pdf" class="btn download-btn">📥 ${r.period}</a>`;
-                });
+                for (let k = 0; k < results.length; k++) {
+                    const r = results[k];
+                    downloadsHtml += '<a href="data:application/pdf;base64,' + r.pdf_base64 + '" download="statement_' + r.period.replace(' ', '_') + '.pdf" class="btn download-btn">📥 ' + r.period + '</a>';
+                }
                 
                 document.getElementById('result-summary').innerHTML = summaryHtml;
                 document.getElementById('downloads-list').innerHTML = downloadsHtml;
