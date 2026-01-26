@@ -2,3 +2,4 @@ reportlab>=4.0
 PyYAML>=6.0
 Faker>=22.0
 Pillow>=10.0
+Flask>=3.0

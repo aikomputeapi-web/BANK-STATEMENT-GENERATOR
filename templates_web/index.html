@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Statement Generator</title>
+    <style>
+        :root {
+            --wf-red: #cd1409;
+            --wf-yellow: #ffcd00;
+            --wf-dark-red: #9b0000;
+            --chase-blue: #117aca;
+            --bofa-red: #dc1431;
+            --usbank-blue: #0052c2;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text-light: #eaeaea;
+            --text-muted: #a0a0a0;
+            --border-color: #2a2a4a;
+            --success-green: #00c853;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #0f0f23 100%);
+            min-height: 100vh;
+            color: var(--text-light);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 15px;
+        }
+
+        .logo img {
+            height: 60px;
+            border-radius: 4px;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--wf-yellow);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-light);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--wf-yellow);
+            box-shadow: 0 0 0 3px rgba(255, 205, 0, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--wf-red) 0%, var(--wf-dark-red) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(205, 20, 9, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-light);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-mock {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            font-size: 0.8rem;
+            padding: 8px 16px;
+        }
+
+        .btn-mock:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .period-toggle {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .period-toggle button {
+            padding: 10px 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+        }
+
+        .period-toggle button.active {
+            background: var(--wf-red);
+            color: white;
+            border-color: var(--wf-red);
+        }
+
+        .date-fields {
+            display: none;
+        }
+
+        .date-fields.visible {
+            display: grid;
+        }
+
+        .generate-section {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .generate-btn {
+            font-size: 1.1rem;
+            padding: 16px 48px;
+        }
+
+        .result-card {
+            display: none;
+            background: linear-gradient(135deg, rgba(0, 200, 83, 0.1) 0%, rgba(0, 200, 83, 0.05) 100%);
+            border-color: var(--success-green);
+        }
+
+        .result-card.visible {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-box .value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--success-green);
+        }
+
+        .stat-box .label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, var(--success-green) 0%, #00a843 100%);
+            color: white;
+            text-decoration: none;
+            margin: 5px;
+        }
+
+        .download-btn:hover {
+            box-shadow: 0 5px 20px rgba(0, 200, 83, 0.4);
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .loading.visible {
+            display: flex;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .money-input {
+            position: relative;
+        }
+
+        .money-input::before {
+            content: '$';
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            z-index: 1;
+        }
+
+        .money-input input {
+            padding-left: 30px;
+        }
+
+        .error-message {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff4444;
+            color: #ff6666;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        .bank-selector {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .bank-selector select {
+            padding: 12px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            border: 2px solid var(--wf-red);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-light);
+            min-width: 250px;
+            cursor: pointer;
+        }
+
+        .bank-selector select:focus {
+            outline: none;
+            border-color: var(--wf-yellow);
+        }
+
+        .unavailable-notice {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+
+        .downloads-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .multi-statement-info {
+            background: rgba(255, 205, 0, 0.1);
+            border: 1px solid var(--wf-yellow);
+            color: var(--wf-yellow);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .multi-statement-info.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <img id="bank-logo" src="/static/wells-fargo-logo.png" alt="Bank Logo" onerror="this.style.display='none'">
+            </div>
+            <h1>Bank Statement Generator</h1>
+            <p>Generate realistic bank statements with mock transaction data</p>
+        </div>
+
+        <!-- Bank Selection -->
+        <div class="card">
+            <div class="card-header">
+                <h2>🏦 Select Bank</h2>
+            </div>
+            <div class="bank-selector">
+                <select id="bank_selection" onchange="onBankChange()">
+                    <option value="wells_fargo">Wells Fargo</option>
+                    <option value="chase" disabled>Chase Bank (Coming Soon)</option>
+                    <option value="bank_of_america" disabled>Bank of America (Coming Soon)</option>
+                    <option value="us_bank" disabled>US Bank (Coming Soon)</option>
+                    <option value="citi" disabled>Citibank (Coming Soon)</option>
+                    <option value="pnc" disabled>PNC Bank (Coming Soon)</option>
+                    <option value="td_bank" disabled>TD Bank (Coming Soon)</option>
+                    <option value="capital_one" disabled>Capital One (Coming Soon)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Account Holder Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2>👤 Account Holder</h2>
+                <button class="btn btn-mock" onclick="generateMockData()">
+                    🎲 Fill with Mock Data
+                </button>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Full Name</label>
+                    <input type="text" id="name" placeholder="JOHN DOE" value="{{ defaults.name }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Street Address</label>
+                    <input type="text" id="street" placeholder="123 MAIN ST APT 4" value="{{ defaults.street }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" id="city" value="{{ defaults.city }}">
+                </div>
+                <div class="form-group">
+                    <label>State</label>
+                    <input type="text" id="state" value="{{ defaults.state }}" maxlength="2">
+                </div>
+                <div class="form-group">
+                    <label>ZIP Code</label>
+                    <input type="text" id="zip" value="{{ defaults.zip }}" maxlength="10">
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Info Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2>🔢 Account Information</h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Account Number</label>
+                    <input type="text" id="account_number" value="{{ defaults.account_number }}">
+                </div>
+                <div class="form-group">
+                    <label>Routing Number</label>
+                    <input type="text" id="routing_number" value="{{ defaults.routing_number }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>Account Type</label>
+                    <select id="account_type">
+                        <option value="Wells Fargo Everyday Checking">Wells Fargo Everyday Checking</option>
+                        <option value="Wells Fargo Business Checking">Wells Fargo Business Checking</option>
+                        <option value="Wells Fargo Prime Checking">Wells Fargo Prime Checking</option>
+                        <option value="Wells Fargo Preferred Checking">Wells Fargo Preferred Checking</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statement Period Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📅 Statement Period</h2>
+            </div>
+            <div class="period-toggle">
+                <button id="btn-1month" class="active" onclick="setPeriodMode('1month')">
+                    1 Month
+                </button>
+                <button id="btn-2months" onclick="setPeriodMode('2months')">
+                    2 Months
+                </button>
+                <button id="btn-3months" onclick="setPeriodMode('3months')">
+                    3 Months
+                </button>
+                <button id="btn-90days" onclick="setPeriodMode('90days')">
+                    Last 90 Days
+                </button>
+                <button id="btn-manual" onclick="setPeriodMode('manual')">
+                    Custom
+                </button>
+            </div>
+            <div class="multi-statement-info" id="multi-statement-info">
+                📄 This will generate separate PDF statements for each month
+            </div>
+            <div class="form-row date-fields" id="date-fields">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="start_date" value="{{ defaults.start_date }}">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" id="end_date" value="{{ defaults.end_date }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Profile Section -->
+        <div class="card">
+            <div class="card-header">
+                <h2>💼 Business Profile</h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Monthly Revenue</label>
+                    <div class="money-input">
+                        <input type="text" id="monthly_revenue" value="100,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Business Type</label>
+                    <select id="business_type">
+                        <option value="retail">Retail</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="service">Service</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Starting Balance (Min)</label>
+                    <div class="money-input">
+                        <input type="text" id="starting_balance_min" value="15,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Starting Balance (Max)</label>
+                    <div class="money-input">
+                        <input type="text" id="starting_balance_max" value="50,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Button -->
+        <div class="card generate-section">
+            <button class="btn btn-primary generate-btn" onclick="generateStatement()" id="generate-btn">
+                📄 Generate Statement
+            </button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <span>Generating statement(s)...</span>
+            </div>
+            <div class="error-message" id="error-message"></div>
+        </div>
+
+        <!-- Result Card -->
+        <div class="card result-card" id="result-card">
+            <div class="card-header">
+                <h2>✅ Statement(s) Generated Successfully!</h2>
+            </div>
+            <div class="result-summary" id="result-summary">
+                <!-- Filled by JavaScript -->
+            </div>
+            <div class="downloads-list" id="downloads-list">
+                <!-- Filled by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let periodMode = '1month';
+
+        function setPeriodMode(mode) {
+            periodMode = mode;
+            // Update all buttons
+            document.querySelectorAll('.period-toggle button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById('btn-' + mode).classList.add('active');
+            
+            // Show/hide date fields for manual mode
+            document.getElementById('date-fields').classList.toggle('visible', mode === 'manual');
+            
+            // Show multi-statement info for 2 or 3 months
+            const multiInfo = document.getElementById('multi-statement-info');
+            multiInfo.classList.toggle('visible', mode === '2months' || mode === '3months');
+        }
+
+        function onBankChange() {
+            const bank = document.getElementById('bank_selection').value;
+            const logo = document.getElementById('bank-logo');
+            
+            // Update logo based on bank (for now only Wells Fargo is available)
+            if (bank === 'wells_fargo') {
+                logo.src = '/static/wells-fargo-logo.png';
+                logo.style.display = 'block';
+            } else {
+                logo.style.display = 'none';
+            }
+        }
+
+        function formatMoney(input) {
+            // Remove all non-digits
+            let value = input.value.replace(/[^\d]/g, '');
+            
+            // Convert to number and format with commas
+            if (value) {
+                value = parseInt(value).toLocaleString('en-US');
+            }
+            
+            input.value = value;
+        }
+
+        function parseMoney(value) {
+            // Remove commas and return as number
+            return parseFloat(value.replace(/,/g, '')) || 0;
+        }
+
+        async function generateMockData() {
+            try {
+                const response = await fetch('/generate-mock-data', { method: 'POST' });
+                const data = await response.json();
+                
+                document.getElementById('name').value = data.name;
+                document.getElementById('street').value = data.street;
+                document.getElementById('city').value = data.city;
+                document.getElementById('state').value = data.state;
+                document.getElementById('zip').value = data.zip;
+            } catch (error) {
+                console.error('Error generating mock data:', error);
+            }
+        }
+
+        async function generateStatement() {
+            const btn = document.getElementById('generate-btn');
+            const loading = document.getElementById('loading');
+            const errorEl = document.getElementById('error-message');
+            const resultCard = document.getElementById('result-card');
+
+            // Hide previous results
+            resultCard.classList.remove('visible');
+            errorEl.classList.remove('visible');
+
+            // Show loading
+            btn.style.display = 'none';
+            loading.classList.add('visible');
+
+            const formData = {
+                bank: document.getElementById('bank_selection').value,
+                name: document.getElementById('name').value,
+                street: document.getElementById('street').value,
+                city: document.getElementById('city').value,
+                state: document.getElementById('state').value,
+                zip: document.getElementById('zip').value,
+                account_number: document.getElementById('account_number').value,
+                routing_number: document.getElementById('routing_number').value,
+                account_type: document.getElementById('account_type').value,
+                period_mode: periodMode,
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                monthly_revenue: parseMoney(document.getElementById('monthly_revenue').value),
+                business_type: document.getElementById('business_type').value,
+                starting_balance_min: parseMoney(document.getElementById('starting_balance_min').value),
+                starting_balance_max: parseMoney(document.getElementById('starting_balance_max').value),
+            };
+
+            try {
+                const response = await fetch('/generate-statement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Handle single or multiple statements
+                    if (data.statements) {
+                        // Multiple statements
+                        let summaryHtml = '';
+                        let downloadsHtml = '';
+                        
+                        data.statements.forEach((stmt, idx) => {
+                            downloadsHtml += `
+                                <a href="/download/${stmt.filename}" class="btn download-btn">
+                                    📥 ${stmt.period}
+                                </a>
+                            `;
+                        });
+                        
+                        // Show totals
+                        const totals = data.totals;
+                        summaryHtml = `
+                            <div class="stat-box">
+                                <div class="value">${totals.total_statements}</div>
+                                <div class="label">Statements</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${totals.total_transactions}</div>
+                                <div class="label">Total Transactions</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${totals.total_pages}</div>
+                                <div class="label">Total Pages</div>
+                            </div>
+                        `;
+                        
+                        document.getElementById('result-summary').innerHTML = summaryHtml;
+                        document.getElementById('downloads-list').innerHTML = downloadsHtml;
+                    } else {
+                        // Single statement
+                        const summary = data.summary;
+                        document.getElementById('result-summary').innerHTML = `
+                            <div class="stat-box">
+                                <div class="value">${summary.beginning_balance}</div>
+                                <div class="label">Beginning Balance</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${summary.total_deposits}</div>
+                                <div class="label">Total Deposits</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${summary.total_withdrawals}</div>
+                                <div class="label">Total Withdrawals</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${summary.ending_balance}</div>
+                                <div class="label">Ending Balance</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${summary.transaction_count}</div>
+                                <div class="label">Transactions</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="value">${summary.pages}</div>
+                                <div class="label">Pages</div>
+                            </div>
+                        `;
+                        document.getElementById('downloads-list').innerHTML = `
+                            <a href="/download/${data.filename}" class="btn download-btn">
+                                📥 Download PDF
+                            </a>
+                        `;
+                    }
+                    resultCard.classList.add('visible');
+                } else {
+                    errorEl.textContent = 'Error: ' + data.error;
+                    errorEl.classList.add('visible');
+                }
+            } catch (error) {
+                errorEl.textContent = 'Error: ' + error.message;
+                errorEl.classList.add('visible');
+            }
+
+            // Hide loading
+            loading.classList.remove('visible');
+            btn.style.display = 'inline-flex';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set today's date as default end date
+            const today = new Date().toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            document.getElementById('end_date').value = today;
+            document.getElementById('start_date').value = thirtyDaysAgo;
+            
+            // Format money fields on load
+            formatMoney(document.getElementById('monthly_revenue'));
+            formatMoney(document.getElementById('starting_balance_min'));
+            formatMoney(document.getElementById('starting_balance_max'));
+        });
+    </script>
+</body>
+</html>
