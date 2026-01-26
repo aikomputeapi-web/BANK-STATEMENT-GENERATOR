@@ -369,10 +369,16 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, HRFlowable
 from faker import Faker
 
 fake = Faker()
+
+# Wells Fargo colors
+WF_RED = colors.Color(0.8, 0.0, 0.0)
+WF_YELLOW = colors.Color(1.0, 0.8, 0.0)
+LINK_BLUE = colors.Color(0.0, 0.0, 0.8)
 
 DEPOSIT_TEMPLATES = [
     ("ATM Cash Deposit", (500, 3000)),
@@ -487,73 +493,223 @@ def generate_transactions(start_date, end_date, monthly_revenue, starting_balanc
 def format_money(amount):
     return "${:,.2f}".format(amount)
 
-def generate_pdf(name, street, city, state, zip_code, account_number, routing_number, 
-                 account_type, start_date, end_date, transactions, starting_balance):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=0.5*inch, rightMargin=0.5*inch,
-                           topMargin=0.5*inch, bottomMargin=0.5*inch)
-    
+def init_styles():
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle('Title2', parent=styles['Heading1'], fontSize=16, fontName='Helvetica-Bold'))
-    styles.add(ParagraphStyle('Small', parent=styles['Normal'], fontSize=7, leading=9))
-    styles.add(ParagraphStyle('Section', parent=styles['Heading2'], fontSize=11, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle('StatementTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.black, spaceAfter=6, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle('SectionHeader', parent=styles['Heading2'], fontSize=11, textColor=colors.black, spaceBefore=12, spaceAfter=6, fontName='Helvetica-Bold'))
+    styles.add(ParagraphStyle('StatementBody', parent=styles['Normal'], fontSize=8, leading=10, fontName='Helvetica'))
+    styles.add(ParagraphStyle('SmallText', parent=styles['Normal'], fontSize=7, leading=9, fontName='Helvetica'))
+    styles.add(ParagraphStyle('RedText', parent=styles['Normal'], fontSize=9, textColor=WF_RED, fontName='Helvetica-Bold'))
+    return styles
+
+def build_header(account_type, end_date, page_num, total_pages, styles):
+    title = Paragraph(account_type, styles['StatementTitle'])
+    date_text = Paragraph(end_date.strftime('%B %d, %Y') + " - Page " + str(page_num) + " of " + str(total_pages), styles['StatementBody'])
     
-    story = []
+    # Wells Fargo logo as colored table
+    logo_table = Table([['WELLS', 'FARGO']], colWidths=[0.5*inch, 0.5*inch], rowHeights=[0.4*inch])
+    logo_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), WF_RED),
+        ('BACKGROUND', (1, 0), (1, 0), WF_YELLOW),
+        ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+        ('TEXTCOLOR', (1, 0), (1, 0), WF_RED),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
     
-    title = Paragraph(account_type, styles['Title2'])
-    date_text = Paragraph(end_date.strftime('%B %d, %Y'), styles['Normal'])
-    story.append(title)
-    story.append(date_text)
-    story.append(Spacer(1, 0.3*inch))
+    header_data = [[[title, date_text], logo_table]]
+    header = Table(header_data, colWidths=[6*inch, 1.5*inch])
+    header.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+    ]))
+    return header
+
+def build_questions_section(styles):
+    elements = []
+    elements.append(Paragraph("<b>Questions?</b>", styles['RedText']))
+    elements.append(Spacer(1, 0.1*inch))
+    contact_text = """<font color="red"><b>Available by phone</b></font> 24 hours a day, 7 days a week:<br/>
+    We accept all relay calls, including 711<br/>
+    <b>1-800-TO-WELLS</b> (1-800-869-3557)<br/>
+    <font color="red"><b>En espanol:</b></font> 1-877-727-2932<br/><br/>
+    <font color="red"><b>Online:</b></font> wellsfargo.com<br/><br/>
+    <font color="red"><b>Write:</b></font> Wells Fargo Bank, N.A. (347)<br/>
+    P.O. Box 6995<br/>
+    Portland, OR 97228-6995"""
+    elements.append(Paragraph(contact_text, styles['SmallText']))
+    return elements
+
+def build_you_and_wells_fargo(styles):
+    elements = []
+    elements.append(Paragraph("<b>You and Wells Fargo</b>", styles['SectionHeader']))
+    text = "Thank you for being a loyal Wells Fargo customer. We value your trust in our company and look forward to continuing to serve you with your financial needs."
+    elements.append(Paragraph(text, styles['SmallText']))
+    return elements
+
+def build_account_options(styles):
+    elements = []
+    elements.append(Paragraph("<b>Account options</b>", styles['SectionHeader']))
+    intro = "A check mark in the box indicates you have these convenient services with your account(s). Go to wellsfargo.com or call the number above if you have questions or if you would like to add new services."
+    elements.append(Paragraph(intro, styles['SmallText']))
+    elements.append(Spacer(1, 0.1*inch))
     
-    story.append(Paragraph(name, styles['Normal']))
-    story.append(Paragraph(street, styles['Normal']))
-    story.append(Paragraph(city + " " + state + " " + zip_code, styles['Normal']))
-    story.append(Spacer(1, 0.3*inch))
+    options = [
+        ['- Online Banking', '- Direct Deposit'],
+        ['- Online Bill Pay', '- Auto Transfer/Payment'],
+        ['- Online Statements', '- Overdraft Protection'],
+        ['- Mobile Banking', '- Debit Card'],
+        ['- My Spending Report', '- Overdraft Service'],
+    ]
+    opt_table = Table(options, colWidths=[1.8*inch, 1.8*inch])
+    opt_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(opt_table)
+    return elements
+
+def build_activity_summary(start_date, end_date, starting_balance, total_deposits, total_withdrawals, ending_balance, styles):
+    elements = []
+    elements.append(Paragraph("<b>Statement period activity summary</b>", styles['SectionHeader']))
     
-    total_deposits = sum(t['amount'] for t in transactions if t['type'] == 'deposit')
-    total_withdrawals = sum(t['amount'] for t in transactions if t['type'] == 'withdrawal')
-    ending_balance = starting_balance + total_deposits - total_withdrawals
-    
-    story.append(Paragraph("<b>Statement Summary</b>", styles['Section']))
     summary_data = [
         ['Beginning balance on ' + start_date.strftime("%m/%d"), format_money(starting_balance)],
         ['Deposits/Additions', format_money(total_deposits)],
         ['Withdrawals/Subtractions', '- ' + format_money(total_withdrawals)],
         ['Ending balance on ' + end_date.strftime("%m/%d"), format_money(ending_balance)],
     ]
-    summary_table = Table(summary_data, colWidths=[2.5*inch, 1.2*inch])
+    summary_table = Table(summary_data, colWidths=[2.2*inch, 1*inch])
     summary_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
-        ('LINEABOVE', (0, 3), (-1, 3), 0.5, colors.black),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('LINEABOVE', (0, -1), (-1, -1), 0.5, colors.black),
     ]))
-    story.append(summary_table)
+    elements.append(summary_table)
+    return elements
+
+def build_account_info(account_number, name, routing_number, styles):
+    elements = []
+    elements.append(Spacer(1, 0.2*inch))
+    elements.append(Paragraph("<font color='red'><b>Account number:</b></font>      " + account_number, styles['SmallText']))
+    elements.append(Spacer(1, 0.05*inch))
+    elements.append(Paragraph(name, styles['StatementBody']))
+    elements.append(Spacer(1, 0.1*inch))
+    elements.append(Paragraph("<i>New Jersey account terms and conditions apply.</i>", styles['SmallText']))
+    elements.append(Spacer(1, 0.2*inch))
+    elements.append(Paragraph("<b>For Direct Deposit use</b>", styles['StatementBody']))
+    elements.append(Paragraph("<b>Routing Number (RTN):</b>      " + routing_number, styles['SmallText']))
+    return elements
+
+def build_overdraft_section(styles):
+    elements = []
+    elements.append(Spacer(1, 0.1*inch))
+    elements.append(Paragraph("<b>Overdraft Protection</b>", styles['StatementBody']))
+    text = "This account is not currently covered by Overdraft Protection. If you would like more information regarding Overdraft Protection and eligibility requirements, please call the number listed on your statement or visit your Wells Fargo branch."
+    elements.append(Paragraph(text, styles['SmallText']))
+    return elements
+
+def generate_pdf(name, street, city, state, zip_code, account_number, routing_number, 
+                 account_type, start_date, end_date, transactions, starting_balance):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=0.5*inch, rightMargin=0.5*inch,
+                           topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = init_styles()
+    story = []
+    
+    total_deposits = sum(t['amount'] for t in transactions if t['type'] == 'deposit')
+    total_withdrawals = sum(t['amount'] for t in transactions if t['type'] == 'withdrawal')
+    ending_balance = starting_balance + total_deposits - total_withdrawals
+    
+    # Calculate total pages (estimate)
+    txn_per_page = 35
+    total_pages = 1 + max(1, (len(transactions) + txn_per_page - 1) // txn_per_page)
+    
+    # PAGE 1: Summary
+    story.append(build_header(account_type, end_date, 1, total_pages, styles))
     story.append(Spacer(1, 0.3*inch))
     
-    story.append(PageBreak())
-    story.append(Paragraph("<b>Transaction History</b>", styles['Section']))
+    # Customer info and Questions
+    customer_info = []
+    customer_info.append(Spacer(1, 0.3*inch))
+    customer_info.append(Paragraph(name, styles['StatementBody']))
+    customer_info.append(Paragraph(street, styles['StatementBody']))
+    customer_info.append(Paragraph(city + " " + state + " " + zip_code, styles['StatementBody']))
     
-    table_data = [['Date', 'Description', 'Deposits', 'Withdrawals', 'Balance']]
+    questions = build_questions_section(styles)
+    
+    header_table = Table([[customer_info, questions]], colWidths=[3.5*inch, 4*inch])
+    header_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    story.append(header_table)
+    story.append(Spacer(1, 0.2*inch))
+    
+    # You and Wells Fargo + Account Options
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+    story.append(Spacer(1, 0.1*inch))
+    
+    left_fargo = build_you_and_wells_fargo(styles)
+    right_options = build_account_options(styles)
+    
+    middle_table = Table([[left_fargo, right_options]], colWidths=[3.5*inch, 4*inch])
+    middle_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    story.append(middle_table)
+    story.append(Spacer(1, 0.2*inch))
+    
+    # Summary + Account Info
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+    story.append(Spacer(1, 0.1*inch))
+    
+    left_summary = build_activity_summary(start_date, end_date, starting_balance, total_deposits, total_withdrawals, ending_balance, styles)
+    right_account = build_account_info(account_number, name, routing_number, styles)
+    
+    summary_table = Table([[left_summary, right_account]], colWidths=[3.5*inch, 4*inch])
+    summary_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    story.append(summary_table)
+    story.append(Spacer(1, 0.2*inch))
+    
+    # Overdraft
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+    story.extend(build_overdraft_section(styles))
+    
+    # PAGE 2+: Transactions
+    story.append(PageBreak())
+    story.append(build_header(account_type, end_date, 2, total_pages, styles))
+    story.append(Spacer(1, 0.2*inch))
+    story.append(Paragraph("<b>Transaction history</b>", styles['SectionHeader']))
+    story.append(Spacer(1, 0.1*inch))
+    
+    table_data = [['Date', 'Description', 'Deposits', 'Withdrawals', 'Ending daily balance']]
     for txn in transactions:
         row = [
             txn['date'].strftime('%m/%d'),
-            txn['description'][:40],
+            txn['description'][:45],
             "{:,.2f}".format(txn['amount']) if txn['type'] == 'deposit' else '',
             "{:,.2f}".format(txn['amount']) if txn['type'] == 'withdrawal' else '',
             "{:,.2f}".format(txn['balance'])
         ]
         table_data.append(row)
     
-    txn_table = Table(table_data, colWidths=[0.5*inch, 3.5*inch, 0.9*inch, 0.9*inch, 0.9*inch], repeatRows=1)
+    # Totals row
+    table_data.append(['', 'Ending balance on ' + end_date.strftime("%m/%d"), 
+                       "{:,.2f}".format(total_deposits), 
+                       "{:,.2f}".format(total_withdrawals),
+                       format_money(ending_balance)])
+    
+    txn_table = Table(table_data, colWidths=[0.5*inch, 3.3*inch, 0.9*inch, 0.9*inch, 1.1*inch], repeatRows=1)
     txn_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.95, 0.95, 0.95)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 7),
         ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
         ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.black),
+        ('LINEABOVE', (0, -1), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
