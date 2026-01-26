@@ -509,13 +509,20 @@ def build_header(account_type, end_date, page_num, total_pages, styles):
     title = Paragraph(account_type, styles['StatementTitle'])
     date_text = Paragraph(end_date.strftime('%B %d, %Y') + " - Page " + str(page_num) + " of " + str(total_pages), styles['StatementBody'])
     
-    # Wells Fargo logo from base64
-    from reportlab.platypus import Image
-    logo_data = base64.b64decode(LOGO_BASE64)
-    logo_buffer = BytesIO(logo_data)
-    logo = Image(logo_buffer, width=1.5*inch, height=0.81*inch)
+    # Wells Fargo logo as colored table (Pyodide/PIL has image limitations)
+    logo_table = Table([['WELLS', 'FARGO']], colWidths=[0.5*inch, 0.5*inch], rowHeights=[0.4*inch])
+    logo_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), WF_RED),
+        ('BACKGROUND', (1, 0), (1, 0), WF_YELLOW),
+        ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+        ('TEXTCOLOR', (1, 0), (1, 0), WF_RED),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
     
-    header_data = [[[title, date_text], logo]]
+    header_data = [[[title, date_text], logo_table]]
     header = Table(header_data, colWidths=[6*inch, 1.5*inch])
     header.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
