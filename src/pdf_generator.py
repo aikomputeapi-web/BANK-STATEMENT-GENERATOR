@@ -14,7 +14,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, 
-    Image, PageBreak, HRFlowable
+    Image, PageBreak, HRFlowable, Flowable
 )
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.pdfgen import canvas
@@ -27,6 +27,27 @@ WF_RED = colors.Color(0.8, 0.0, 0.0)
 WF_YELLOW = colors.Color(1.0, 0.8, 0.0)
 WF_DARK_RED = colors.Color(0.6, 0.0, 0.0)
 LINK_BLUE = colors.Color(0.0, 0.0, 0.8)
+
+
+class DrawnCheckbox(Flowable):
+    """Simple drawn checkbox that works reliably in generated PDFs."""
+
+    def __init__(self, checked: bool, size: float = 8):
+        super().__init__()
+        self.checked = checked
+        self.size = size
+        self.width = size
+        self.height = size
+
+    def draw(self):
+        self.canv.setStrokeColor(colors.black)
+        self.canv.setLineWidth(0.7)
+        self.canv.rect(0, 0, self.size, self.size, stroke=1, fill=0)
+
+        if self.checked:
+            self.canv.setLineWidth(1.2)
+            self.canv.line(self.size * 0.18, self.size * 0.45, self.size * 0.40, self.size * 0.18)
+            self.canv.line(self.size * 0.40, self.size * 0.18, self.size * 0.82, self.size * 0.78)
 
 
 class StatementPDFGenerator:
@@ -101,7 +122,7 @@ class StatementPDFGenerator:
             'RedText',
             parent=self.styles['Normal'],
             fontSize=9,
-            textColor=WF_RED,
+            textColor=colors.black,
             fontName='Helvetica-Bold'
         ))
     
@@ -159,12 +180,13 @@ class StatementPDFGenerator:
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+            ('LINEAFTER', (0, 0), (0, 0), 1.0, colors.black),
         ]))
         elements.append(header_table)
         elements.append(Spacer(1, 0.3 * inch))
         
         # You and Wells Fargo + Account Options
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+        elements.append(HRFlowable(width="100%", thickness=1.0, color=colors.black))
         elements.append(Spacer(1, 0.1 * inch))
         
         left_fargo = self._build_you_and_wells_fargo()
@@ -181,7 +203,7 @@ class StatementPDFGenerator:
         elements.append(Spacer(1, 0.2 * inch))
         
         # Statement Period Activity Summary + Account Info
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+        elements.append(HRFlowable(width="100%", thickness=1.0, color=colors.black))
         elements.append(Spacer(1, 0.1 * inch))
         
         left_summary = self._build_activity_summary(statement)
@@ -198,7 +220,7 @@ class StatementPDFGenerator:
         elements.append(Spacer(1, 0.3 * inch))
         
         # Overdraft Protection
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
+        elements.append(HRFlowable(width="100%", thickness=1.0, color=colors.black))
         elements.append(self._build_overdraft_section())
         
         return elements
@@ -267,12 +289,12 @@ class StatementPDFGenerator:
         elements.append(Spacer(1, 0.1 * inch))
         
         contact_text = """
-        <font color="red"><b>Available by phone</b></font> 24 hours a day, 7 days a week:<br/>
+        <b>Available by phone</b> 24 hours a day, 7 days a week:<br/>
         We accept all relay calls, including 711<br/>
         <b>1-800-TO-WELLS</b> (1-800-869-3557)<br/>
-        <font color="red"><b>En español:</b></font> 1-877-727-2932<br/><br/>
-        <font color="red"><b>Online:</b></font> wellsfargo.com<br/><br/>
-        <font color="red"><b>Write:</b></font> Wells Fargo Bank, N.A. (347)<br/>
+        <b>En español:</b> 1-877-727-2932<br/><br/>
+        <b>Online:</b> wellsfargo.com<br/><br/>
+        <b>Write:</b> Wells Fargo Bank, N.A. (347)<br/>
         P.O. Box 6995<br/>
         Portland, OR 97228-6995
         """
@@ -297,20 +319,30 @@ class StatementPDFGenerator:
         elements.append(Paragraph(intro, self.styles['SmallText']))
         elements.append(Spacer(1, 0.1 * inch))
         
-        # Options grid
-        options_data = [
-            ['☑ Online Banking', '☑ Direct Deposit'],
-            ['☑ Online Bill Pay', '☑ Auto Transfer/Payment'],
-            ['☑ Online Statements', '☑ Overdraft Protection'],
-            ['☐ Mobile Banking', '☑ Debit Card'],
-            ['☐ My Spending Report', '☐ Overdraft Service'],
+        option_pairs = [
+            ((True, 'Online Banking'), (True, 'Direct Deposit')),
+            ((True, 'Online Bill Pay'), (True, 'Auto Transfer/Payment')),
+            ((True, 'Online Statements'), (False, 'Overdraft Protection')),
+            ((False, 'Mobile Banking'), (True, 'Debit Card')),
+            ((False, 'My Spending Report'), (False, 'Overdraft Service')),
         ]
-        
-        options_table = Table(options_data, colWidths=[1.8 * inch, 1.8 * inch])
+
+        options_data = []
+        for left_option, right_option in option_pairs:
+            options_data.append([
+                DrawnCheckbox(left_option[0], size=8),
+                Paragraph(left_option[1], self.styles['SmallText']),
+                DrawnCheckbox(right_option[0], size=8),
+                Paragraph(right_option[1], self.styles['SmallText']),
+            ])
+
+        options_table = Table(options_data, colWidths=[0.16 * inch, 1.64 * inch, 0.16 * inch, 1.64 * inch])
         options_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 7),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         ]))
         elements.append(options_table)
         
@@ -352,6 +384,7 @@ class StatementPDFGenerator:
         
         info = statement.account_info
         holder = statement.account_holder
+        state_name = self._get_state_name(holder.address.state)
         
         elements.append(Spacer(1, 0.2 * inch))
         
@@ -360,7 +393,7 @@ class StatementPDFGenerator:
              info.account_number],
             ['', holder.name],
             ['', ''],
-            ['', Paragraph('<i>New Jersey account terms and conditions apply.</i>', self.styles['SmallText'])],
+            ['', Paragraph(f'<i>{state_name} account terms and conditions apply.</i>', self.styles['SmallText'])],
             ['', ''],
             [Paragraph('<b>For Direct Deposit use</b>', self.styles['SmallText']), ''],
             [Paragraph('<b>Routing Number (RTN):</b>', self.styles['SmallText']), info.routing_number],
@@ -375,6 +408,62 @@ class StatementPDFGenerator:
         elements.append(info_table)
         
         return elements
+
+    def _get_state_name(self, state_code: str) -> str:
+        state_names = {
+            'AL': 'Alabama',
+            'AK': 'Alaska',
+            'AZ': 'Arizona',
+            'AR': 'Arkansas',
+            'CA': 'California',
+            'CO': 'Colorado',
+            'CT': 'Connecticut',
+            'DE': 'Delaware',
+            'FL': 'Florida',
+            'GA': 'Georgia',
+            'HI': 'Hawaii',
+            'ID': 'Idaho',
+            'IL': 'Illinois',
+            'IN': 'Indiana',
+            'IA': 'Iowa',
+            'KS': 'Kansas',
+            'KY': 'Kentucky',
+            'LA': 'Louisiana',
+            'ME': 'Maine',
+            'MD': 'Maryland',
+            'MA': 'Massachusetts',
+            'MI': 'Michigan',
+            'MN': 'Minnesota',
+            'MS': 'Mississippi',
+            'MO': 'Missouri',
+            'MT': 'Montana',
+            'NE': 'Nebraska',
+            'NV': 'Nevada',
+            'NH': 'New Hampshire',
+            'NJ': 'New Jersey',
+            'NM': 'New Mexico',
+            'NY': 'New York',
+            'NC': 'North Carolina',
+            'ND': 'North Dakota',
+            'OH': 'Ohio',
+            'OK': 'Oklahoma',
+            'OR': 'Oregon',
+            'PA': 'Pennsylvania',
+            'RI': 'Rhode Island',
+            'SC': 'South Carolina',
+            'SD': 'South Dakota',
+            'TN': 'Tennessee',
+            'TX': 'Texas',
+            'UT': 'Utah',
+            'VT': 'Vermont',
+            'VA': 'Virginia',
+            'WA': 'Washington',
+            'WV': 'West Virginia',
+            'WI': 'Wisconsin',
+            'WY': 'Wyoming',
+            'DC': 'District of Columbia',
+        }
+        return state_names.get((state_code or '').upper(), state_code or 'State')
     
     def _build_overdraft_section(self) -> Paragraph:
         """Build overdraft protection disclaimer."""
@@ -409,7 +498,7 @@ class StatementPDFGenerator:
                 txn.description[:50] + ('...' if len(txn.description) > 50 else ''),
                 f'{txn.deposit_amount:,.2f}' if txn.deposit_amount else '',
                 f'{txn.withdrawal_amount:,.2f}' if txn.withdrawal_amount else '',
-                f'{txn.running_balance:,.2f}'
+                f'{txn.running_balance:,.2f}' if txn.running_balance != 0.0 else ''
             ]
             table_data.append(row)
         
@@ -432,8 +521,8 @@ class StatementPDFGenerator:
             ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),   # Amounts right
             
             # Grid
-            ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.black),
-            ('LINEBELOW', (0, 1), (-1, -2), 0.25, colors.lightgrey),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.0, colors.black),
+            ('LINEBELOW', (0, 1), (-1, -2), 1.0, colors.lightgrey),
             
             # Padding
             ('TOPPADDING', (0, 0), (-1, -1), 2),

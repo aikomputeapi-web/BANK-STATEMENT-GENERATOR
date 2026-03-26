@@ -104,6 +104,16 @@
             flex-direction: column;
         }
 
+        .form-group.hidden {
+            display: none;
+        }
+
+        .profile-note {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+        }
+
         .form-group label {
             font-size: 0.8rem;
             color: var(--text-muted);
@@ -209,6 +219,56 @@
 
         .date-fields.visible {
             display: grid;
+        }
+
+        /* Month anchor selector (shown for preset modes) */
+        .anchor-month-selector {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 205, 0, 0.07);
+            border: 1px solid rgba(255, 205, 0, 0.25);
+            border-radius: 8px;
+        }
+
+        .anchor-month-selector.visible {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .anchor-month-selector label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            margin-bottom: 0;
+        }
+
+        .anchor-month-selector select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--text-light);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .anchor-month-selector select:focus {
+            outline: none;
+            border-color: var(--wf-yellow);
+            box-shadow: 0 0 0 2px rgba(255, 205, 0, 0.15);
+        }
+
+        .anchor-period-preview {
+            font-size: 0.82rem;
+            color: var(--wf-yellow);
+            opacity: 0.85;
+            white-space: nowrap;
         }
 
         .generate-section {
@@ -428,27 +488,27 @@
             <div class="form-row">
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>Full Name</label>
-                    <input type="text" id="name" placeholder="JOHN DOE" value="{{ defaults.name }}">
+                    <input type="text" id="name" placeholder="JOHN DOE" value="{{ defaults.name }}" autocomplete="off" spellcheck="false">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>Street Address</label>
-                    <input type="text" id="street" placeholder="123 MAIN ST APT 4" value="{{ defaults.street }}">
+                    <input type="text" id="street" placeholder="123 MAIN ST APT 4" value="{{ defaults.street }}" autocomplete="off" spellcheck="false">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>City</label>
-                    <input type="text" id="city" value="{{ defaults.city }}">
+                    <input type="text" id="city" value="{{ defaults.city }}" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="form-group">
                     <label>State</label>
-                    <input type="text" id="state" value="{{ defaults.state }}" maxlength="2">
+                    <input type="text" id="state" value="{{ defaults.state }}" maxlength="2" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="form-group">
                     <label>ZIP Code</label>
-                    <input type="text" id="zip" value="{{ defaults.zip }}" maxlength="10">
+                    <input type="text" id="zip" value="{{ defaults.zip }}" maxlength="10" autocomplete="off" spellcheck="false">
                 </div>
             </div>
         </div>
@@ -461,11 +521,11 @@
             <div class="form-row">
                 <div class="form-group">
                     <label>Account Number</label>
-                    <input type="text" id="account_number" value="{{ defaults.account_number }}">
+                    <input type="text" id="account_number" value="{{ defaults.account_number }}" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="form-group">
                     <label>Routing Number</label>
-                    <input type="text" id="routing_number" value="{{ defaults.routing_number }}">
+                    <input type="text" id="routing_number" value="{{ defaults.routing_number }}" autocomplete="off" spellcheck="false">
                 </div>
             </div>
             <div class="form-row">
@@ -506,6 +566,28 @@
             <div class="multi-statement-info" id="multi-statement-info">
                 📄 This will generate separate PDF statements for each month
             </div>
+            <!-- Anchor month selector: shown for all preset modes -->
+            <div class="anchor-month-selector" id="anchor-month-selector">
+                <label>📅 Statement Month:</label>
+                <select id="anchor_month" onchange="updateAnchorPreview()">
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+                <select id="anchor_year" onchange="updateAnchorPreview()">
+                    <!-- Populated by JS -->
+                </select>
+                <span class="anchor-period-preview" id="anchor-period-preview"></span>
+            </div>
             <div class="form-row date-fields" id="date-fields">
                 <div class="form-group">
                     <label>Start Date</label>
@@ -521,16 +603,30 @@
         <!-- Business Profile Section -->
         <div class="card">
             <div class="card-header">
-                <h2>💼 Business Profile</h2>
+                <h2 id="profile-title">👤 Personal Account Profile</h2>
             </div>
+            <p class="profile-note" id="profile-note">
+                Personal checking uses two payroll-style deposits per month and normal household spending.
+            </p>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Monthly Revenue</label>
+                    <label id="monthly-amount-label">Monthly Income</label>
                     <div class="money-input">
-                        <input type="text" id="monthly_revenue" value="100,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                        <input type="text" id="monthly_revenue" value="{{ '{:,.0f}'.format(defaults.monthly_revenue) }}" oninput="formatMoney(this)" onblur="formatMoney(this)">
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="personal-profile-group">
+                    <label>Spending Profile</label>
+                    <select id="personal_profile">
+                        <option value="auto">Auto</option>
+                        <option value="homebody">Homebody</option>
+                        <option value="commuter">Commuter</option>
+                        <option value="student">Student</option>
+                        <option value="suburban_family">Suburban Family</option>
+                        <option value="higher_income_professional">Higher-Income Professional</option>
+                    </select>
+                </div>
+                <div class="form-group" id="business-type-group">
                     <label>Business Type</label>
                     <select id="business_type">
                         <option value="retail">Retail</option>
@@ -543,14 +639,20 @@
                 <div class="form-group">
                     <label>Starting Balance (Min)</label>
                     <div class="money-input">
-                        <input type="text" id="starting_balance_min" value="15,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                        <input type="text" id="starting_balance_min" value="{{ '{:,.0f}'.format(defaults.starting_balance_min) }}" oninput="formatMoney(this)" onblur="formatMoney(this)">
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Starting Balance (Max)</label>
                     <div class="money-input">
-                        <input type="text" id="starting_balance_max" value="50,000" oninput="formatMoney(this)" onblur="formatMoney(this)">
+                        <input type="text" id="starting_balance_max" value="{{ '{:,.0f}'.format(defaults.starting_balance_max) }}" oninput="formatMoney(this)" onblur="formatMoney(this)">
                     </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Generation Seed (Optional)</label>
+                    <input type="text" id="generation_seed" value="{{ defaults.generation_seed }}" placeholder="Leave blank for random">
                 </div>
             </div>
         </div>
@@ -583,6 +685,30 @@
 
     <script>
         let periodMode = '1month';
+        let activePresetKey = null;
+        // Default anchor: prior complete month (overridden by server-injected values)
+        let defaultAnchorYear = {{ defaults.default_anchor_year }};
+        let defaultAnchorMonth = {{ defaults.default_anchor_month }};
+        const currentYear = {{ defaults.current_year }};
+
+        const ACCOUNT_PRESETS = {
+            personal: {
+                title: '👤 Personal Account Profile',
+                note: 'Personal checking uses profile-driven household spending, recurring merchants, and weekday-anchored payroll deposits.',
+                monthlyAmountLabel: 'Monthly Income',
+                monthlyAmount: '8,500',
+                startingBalanceMin: '2,500',
+                startingBalanceMax: '12,000'
+            },
+            business: {
+                title: '💼 Business Account Profile',
+                note: 'Business checking uses higher deposit volume, business expenses, and optional business type selection.',
+                monthlyAmountLabel: 'Monthly Revenue',
+                monthlyAmount: '100,000',
+                startingBalanceMin: '15,000',
+                startingBalanceMax: '50,000'
+            }
+        };
 
         function setPeriodMode(mode) {
             periodMode = mode;
@@ -592,12 +718,18 @@
             });
             document.getElementById('btn-' + mode).classList.add('active');
             
-            // Show/hide date fields for manual mode
+            // Show/hide date fields for manual mode only
             document.getElementById('date-fields').classList.toggle('visible', mode === 'manual');
-            
+
+            // Show anchor month selector for all preset modes (not manual)
+            document.getElementById('anchor-month-selector').classList.toggle('visible', mode !== 'manual');
+
             // Show multi-statement info for 2 or 3 months
             const multiInfo = document.getElementById('multi-statement-info');
             multiInfo.classList.toggle('visible', mode === '2months' || mode === '3months');
+
+            // Update the preview text
+            updateAnchorPreview();
         }
 
         function onBankChange() {
@@ -611,6 +743,59 @@
             } else {
                 logo.style.display = 'none';
             }
+        }
+
+        const MONTH_NAMES = [
+            'January','February','March','April','May','June',
+            'July','August','September','October','November','December'
+        ];
+
+        function updateAnchorPreview() {
+            const month = parseInt(document.getElementById('anchor_month').value);
+            const year = parseInt(document.getElementById('anchor_year').value);
+            if (!month || !year) return;
+
+            const mode = periodMode;
+            let previewText = '';
+
+            if (mode === '1month') {
+                previewText = `→ ${MONTH_NAMES[month-1]} ${year}`;
+            } else if (mode === '2months') {
+                // show 2 months ending at selected
+                let m2 = month - 1, y2 = year;
+                if (m2 < 1) { m2 = 12; y2--; }
+                previewText = `→ ${MONTH_NAMES[m2-1]} ${y2} – ${MONTH_NAMES[month-1]} ${year}`;
+            } else if (mode === '3months') {
+                let m2 = month - 1, y2 = year;
+                if (m2 < 1) { m2 = 12; y2--; }
+                let m3 = m2 - 1, y3 = y2;
+                if (m3 < 1) { m3 = 12; y3--; }
+                previewText = `→ ${MONTH_NAMES[m3-1]} ${y3} – ${MONTH_NAMES[month-1]} ${year}`;
+            } else if (mode === '90days') {
+                previewText = `→ 90 days ending ${MONTH_NAMES[month-1]} ${year}`;
+            }
+
+            document.getElementById('anchor-period-preview').textContent = previewText;
+        }
+
+        function buildYearOptions() {
+            const yearSelect = document.getElementById('anchor_year');
+            yearSelect.innerHTML = '';
+            // Show 5 years back from current year
+            for (let y = currentYear; y >= currentYear - 5; y--) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                if (y === defaultAnchorYear) opt.selected = true;
+                yearSelect.appendChild(opt);
+            }
+        }
+
+        function initAnchorSelector() {
+            buildYearOptions();
+            // Set default month
+            document.getElementById('anchor_month').value = defaultAnchorMonth;
+            updateAnchorPreview();
         }
 
         function formatMoney(input) {
@@ -628,6 +813,44 @@
         function parseMoney(value) {
             // Remove commas and return as number
             return parseFloat(value.replace(/,/g, '')) || 0;
+        }
+
+        function isBusinessCheckingAccount(accountType) {
+            return accountType.toLowerCase().includes('business checking');
+        }
+
+        function getPresetKey() {
+            const accountType = document.getElementById('account_type').value;
+            return isBusinessCheckingAccount(accountType) ? 'business' : 'personal';
+        }
+
+        function updatePresetField(inputId, presetField, previousPreset, nextPreset, force) {
+            const input = document.getElementById(inputId);
+            const currentValue = input.value.trim();
+            const previousValue = previousPreset ? previousPreset[presetField] : null;
+            if (force || !currentValue || currentValue === previousValue) {
+                input.value = nextPreset[presetField];
+            }
+        }
+
+        function updateBusinessTypeVisibility() {
+            const presetKey = getPresetKey();
+            const preset = ACCOUNT_PRESETS[presetKey];
+            const previousPreset = activePresetKey ? ACCOUNT_PRESETS[activePresetKey] : null;
+            const businessTypeGroup = document.getElementById('business-type-group');
+            const personalProfileGroup = document.getElementById('personal-profile-group');
+            businessTypeGroup.classList.toggle('hidden', presetKey !== 'business');
+            personalProfileGroup.classList.toggle('hidden', presetKey !== 'personal');
+
+            document.getElementById('profile-title').textContent = preset.title;
+            document.getElementById('profile-note').textContent = preset.note;
+            document.getElementById('monthly-amount-label').textContent = preset.monthlyAmountLabel;
+
+            updatePresetField('monthly_revenue', 'monthlyAmount', previousPreset, preset, activePresetKey === null);
+            updatePresetField('starting_balance_min', 'startingBalanceMin', previousPreset, preset, activePresetKey === null);
+            updatePresetField('starting_balance_max', 'startingBalanceMax', previousPreset, preset, activePresetKey === null);
+
+            activePresetKey = presetKey;
         }
 
         async function generateMockData() {
@@ -655,6 +878,29 @@
             resultCard.classList.remove('visible');
             errorEl.classList.remove('visible');
 
+            // --- Validation ---
+            const nameVal = document.getElementById('name').value.trim();
+            const streetVal = document.getElementById('street').value.trim();
+            const cityVal = document.getElementById('city').value.trim();
+
+            // Reset border highlights
+            ['name', 'street', 'city', 'state', 'zip'].forEach(id => {
+                document.getElementById(id).style.borderColor = '';
+            });
+
+            const missing = [];
+            if (!nameVal) { missing.push('Full Name'); document.getElementById('name').style.borderColor = '#ff4444'; }
+            if (!streetVal) { missing.push('Street Address'); document.getElementById('street').style.borderColor = '#ff4444'; }
+            if (!cityVal) { missing.push('City'); document.getElementById('city').style.borderColor = '#ff4444'; }
+
+            if (missing.length > 0) {
+                errorEl.textContent = `Please fill in the following required fields: ${missing.join(', ')}`;
+                errorEl.classList.add('visible');
+                // Scroll to first missing field
+                document.getElementById(missing[0] === 'Full Name' ? 'name' : missing[0] === 'Street Address' ? 'street' : 'city').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
             // Show loading
             btn.style.display = 'none';
             loading.classList.add('visible');
@@ -670,9 +916,14 @@
                 routing_number: document.getElementById('routing_number').value,
                 account_type: document.getElementById('account_type').value,
                 period_mode: periodMode,
+                // Pass anchor month/year for preset modes
+                anchor_month: periodMode !== 'manual' ? document.getElementById('anchor_month').value : null,
+                anchor_year: periodMode !== 'manual' ? document.getElementById('anchor_year').value : null,
                 start_date: document.getElementById('start_date').value,
                 end_date: document.getElementById('end_date').value,
                 monthly_revenue: parseMoney(document.getElementById('monthly_revenue').value),
+                personal_profile: document.getElementById('personal_profile').value,
+                generation_seed: document.getElementById('generation_seed').value.trim(),
                 business_type: document.getElementById('business_type').value,
                 starting_balance_min: parseMoney(document.getElementById('starting_balance_min').value),
                 starting_balance_max: parseMoney(document.getElementById('starting_balance_max').value),
@@ -773,16 +1024,26 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            // Set today's date as default end date
-            const today = new Date().toISOString().split('T')[0];
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            document.getElementById('end_date').value = today;
+            // Set today's date as default end date for manual mode
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            document.getElementById('end_date').value = todayStr;
             document.getElementById('start_date').value = thirtyDaysAgo;
+
+            // Initialize anchor month/year selector with server-provided defaults
+            initAnchorSelector();
+
+            // Show anchor selector since default mode is 1month (not manual)
+            document.getElementById('anchor-month-selector').classList.add('visible');
+
+            document.getElementById('account_type').addEventListener('change', updateBusinessTypeVisibility);
             
             // Format money fields on load
             formatMoney(document.getElementById('monthly_revenue'));
             formatMoney(document.getElementById('starting_balance_min'));
             formatMoney(document.getElementById('starting_balance_max'));
+            updateBusinessTypeVisibility();
         });
     </script>
 </body>

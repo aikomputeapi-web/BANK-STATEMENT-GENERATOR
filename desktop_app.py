@@ -93,8 +93,8 @@ def index():
         'period_mode': '1month',
         'start_date': (date.today() - timedelta(days=30)).strftime('%Y-%m-%d'),
         'end_date': date.today().strftime('%Y-%m-%d'),
-        'monthly_revenue': 100000, 'business_type': 'retail',
-        'starting_balance_min': 15000, 'starting_balance_max': 50000,
+        'monthly_revenue': 8500, 'business_type': 'retail', 'personal_profile': 'auto', 'generation_seed': '',
+        'starting_balance_min': 2500, 'starting_balance_max': 12000,
     }
     return render_template('index.html', defaults=defaults)
 
@@ -138,7 +138,10 @@ def generate_statement():
         
         pdf_gen = StatementPDFGenerator(output_dir=str(output_dir))
         generator = TransactionGenerator(monthly_revenue=float(data['monthly_revenue']),
-                                        business_type=data['business_type'])
+                                        business_type=data['business_type'],
+                                        account_type=data['account_type'],
+                                        personal_profile=data.get('personal_profile', 'auto'),
+                                        seed=data.get('generation_seed', ''))
         
         if len(periods) > 1:
             statements_info = []

@@ -60,30 +60,37 @@ def get_month_range(year: int, month: int):
     return first_day, last_day
 
 
-def get_previous_months(num_months: int):
-    """Get date ranges for the previous N complete months."""
+def get_default_anchor():
+    """Return (year, month) of the most recent fully complete month."""
     today = date.today()
-    
-    # Start from the previous month (most recent complete month)
     if today.month == 1:
-        year = today.year - 1
-        month = 12
-    else:
-        year = today.year
-        month = today.month - 1
+        return today.year - 1, 12
+    return today.year, today.month - 1
+
+
+def get_previous_months(num_months: int, anchor_year: "int | None" = None, anchor_month: "int | None" = None):
+    """Get date ranges for N complete months ending at (anchor_year, anchor_month).
     
+    If anchor_year/anchor_month are not provided, defaults to the most recent
+    complete calendar month before today.
+    """
+    # Resolve anchor to concrete ints
+    resolved = get_default_anchor() if (anchor_year is None or anchor_month is None) else (anchor_year, anchor_month)
+    year: int = resolved[0]
+    month: int = resolved[1]
+
     months = []
     for i in range(num_months):
         first_day, last_day = get_month_range(year, month)
         months.append((first_day, last_day))
-        
+
         # Go to previous month
         if month == 1:
             year -= 1
             month = 12
         else:
             month -= 1
-    
+
     # Return in chronological order (oldest first)
     return list(reversed(months))
 
@@ -91,6 +98,9 @@ def get_previous_months(num_months: int):
 @app.route('/')
 def index():
     """Render the main settings page."""
+    today = date.today()
+    anchor_year, anchor_month = get_default_anchor()
+
     # Default values (most common/average)
     defaults = {
         'name': '',
@@ -102,14 +112,34 @@ def index():
         'routing_number': '121042882',  # Wells Fargo CA routing
         'account_type': 'Wells Fargo Everyday Checking',
         'period_mode': '1month',
-        'start_date': (date.today() - timedelta(days=30)).strftime('%Y-%m-%d'),
-        'end_date': date.today().strftime('%Y-%m-%d'),
-        'monthly_revenue': 100000,
+        'start_date': (today - timedelta(days=30)).strftime('%Y-%m-%d'),
+        'end_date': today.strftime('%Y-%m-%d'),
+        'monthly_revenue': 8500,
         'business_type': 'retail',
-        'starting_balance_min': 15000,
-        'starting_balance_max': 50000,
+        'personal_profile': 'auto',
+        'generation_seed': '',
+        'starting_balance_min': 2500,
+        'starting_balance_max': 12000,
+        # Default anchor: the prior complete month
+        'default_anchor_year': anchor_year,
+        'default_anchor_month': anchor_month,
+        'current_year': today.year,
     }
     return render_template('index.html', defaults=defaults)
+
+
+@app.route('/get-default-period')
+def get_default_period():
+    """Return the default anchor month/year (the prior complete month)."""
+    anchor_year, anchor_month = get_default_anchor()
+    first_day, last_day = get_month_range(anchor_year, anchor_month)
+    return jsonify({
+        'anchor_year': anchor_year,
+        'anchor_month': anchor_month,
+        'first_day': first_day.strftime('%Y-%m-%d'),
+        'last_day': last_day.strftime('%Y-%m-%d'),
+        'label': first_day.strftime('%B %Y'),
+    })
 
 
 @app.route('/generate-mock-data', methods=['POST'])
@@ -133,7 +163,15 @@ def generate_statement():
     """Generate bank statement(s) from form data."""
     try:
         data = request.json
-        
+
+        # Debug: print what name/address was received
+        print(f"\n[DEBUG] generate_statement received:")
+        print(f"  name   = {data.get('name', '')!r}")
+        print(f"  street = {data.get('street', '')!r}")
+        print(f"  city   = {data.get('city', '')!r}")
+        print(f"  state  = {data.get('state', '')!r}")
+        print(f"  zip    = {data.get('zip', '')!r}")
+
         # Create account holder
         address = Address(
             street=data['street'].upper(),
@@ -152,15 +190,24 @@ def generate_statement():
         
         # Determine periods based on mode
         period_mode = data['period_mode']
-        
+
+        # Read optional anchor month (user-selected starting month)
+        anchor_year = int(data['anchor_year']) if data.get('anchor_year') else None
+        anchor_month = int(data['anchor_month']) if data.get('anchor_month') else None
+
         if period_mode == '1month':
-            periods = get_previous_months(1)
+            periods = get_previous_months(1, anchor_year, anchor_month)
         elif period_mode == '2months':
-            periods = get_previous_months(2)
+            periods = get_previous_months(2, anchor_year, anchor_month)
         elif period_mode == '3months':
-            periods = get_previous_months(3)
+            periods = get_previous_months(3, anchor_year, anchor_month)
         elif period_mode == '90days':
-            end_date = date.today()
+            # For 90 days, use last day of anchor month as end date
+            if anchor_year and anchor_month:
+                _, last = get_month_range(anchor_year, anchor_month)
+                end_date = last
+            else:
+                end_date = date.today()
             start_date = end_date - timedelta(days=90)
             periods = [(start_date, end_date)]
         else:  # manual
@@ -172,7 +219,10 @@ def generate_statement():
         pdf_gen = StatementPDFGenerator(output_dir='output')
         generator = TransactionGenerator(
             monthly_revenue=float(data['monthly_revenue']),
-            business_type=data['business_type']
+            business_type=data['business_type'],
+            account_type=data['account_type'],
+            personal_profile=data.get('personal_profile', 'auto'),
+            seed=data.get('generation_seed', '')
         )
         
         # For multi-month, generate separate statements with rolling balance

@@ -101,10 +101,14 @@ def main():
     print(f"\n[2/5] Starting balance: ${starting_balance:,.2f}")
     
     # Generate transactions
-    print(f"\n[3/5] Generating transactions for ${business['monthly_revenue']:,}/month retail business...")
+    income_label = "monthly revenue" if "business checking" in account_info.account_type.lower() else "monthly income"
+    print(f"\n[3/5] Generating transactions for ${business['monthly_revenue']:,}/{income_label}...")
     generator = TransactionGenerator(
         monthly_revenue=business['monthly_revenue'],
-        business_type=business['business_type']
+        business_type=business['business_type'],
+        account_type=account_info.account_type,
+        personal_profile=business.get('personal_profile', 'auto'),
+        seed=business.get('generation_seed', '')
     )
     
     transactions, ending_balance = generator.generate_transactions(period, starting_balance)
