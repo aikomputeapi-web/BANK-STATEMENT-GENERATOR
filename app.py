@@ -342,14 +342,22 @@ def open_browser():
     webbrowser.open('http://127.0.0.1:5000')
 
 
+# Ensure output directory always exists (needed on Render & local)
+Path('output').mkdir(exist_ok=True)
+
+
 if __name__ == '__main__':
-    # Open browser after a short delay
-    Timer(1.5, open_browser).start()
-    print("\n" + "=" * 60)
-    print("Bank Statement Generator - Web UI")
-    print("=" * 60)
-    print("\nStarting server at http://127.0.0.1:5000")
-    print("Browser will open automatically...")
-    print("\nPress Ctrl+C to stop the server\n")
-    
-    app.run(debug=False, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    is_local = port == 5000 and not os.environ.get('RENDER')
+
+    if is_local:
+        # Only open browser when running locally
+        Timer(1.5, open_browser).start()
+        print("\n" + "=" * 60)
+        print("Bank Statement Generator - Web UI")
+        print("=" * 60)
+        print("\nStarting server at http://127.0.0.1:5000")
+        print("Browser will open automatically...")
+        print("\nPress Ctrl+C to stop the server\n")
+
+    app.run(debug=False, host='0.0.0.0', port=port)

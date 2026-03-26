@@ -4,7 +4,7 @@ Creates PDF documents matching the Wells Fargo statement format.
 """
 
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 from pathlib import Path
 
@@ -13,7 +13,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, 
+    BaseDocTemplate, SimpleDocTemplate, Frame, PageTemplate, NextPageTemplate,
+    Paragraph, Spacer, Table, TableStyle,
     Image, PageBreak, HRFlowable, Flowable
 )
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
@@ -130,34 +131,70 @@ class StatementPDFGenerator:
         """
         Generate a PDF statement and return the file path.
         """
-        # Create filename
-        filename = f"wells_fargo_statement_{statement.period.end_date.strftime('%Y-%m-%d')}.pdf"
+        # Store statement so header/footer callback can access it
+        self._current_statement = statement
+
+        # Build filename: Name_Wells_Fargo_Statement_Month_Year_YYYYMMDD_HHMMSS.pdf
+        holder_name = statement.account_holder.name.replace(' ', '_')
+        stmt_month = statement.period.end_date.strftime('%B')   # e.g. August
+        stmt_year  = statement.period.end_date.strftime('%Y')   # e.g. 2021
+        now        = datetime.now().strftime('%Y%m%d_%H%M%S')   # e.g. 20260325_204103
+        filename   = f"{holder_name}_Wells_Fargo_Statement_{stmt_month}_{stmt_year}_{now}.pdf"
         filepath = self.output_dir / filename
-        
-        # Create PDF with custom page template
-        doc = SimpleDocTemplate(
+
+        # Height reserved for the drawn header on pages 2+ (logo + rule + padding)
+        HEADER_RESERVE = 0.85 * inch
+
+        content_w = self.page_width - 2 * self.margin
+        content_h = self.page_height - 2 * self.margin
+
+        # Full-height frame for page 1
+        frame_p1 = Frame(
+            self.margin, self.margin,
+            content_w, content_h,
+            id='page1',
+        )
+        # Shorter frame for pages 2+ — leaves room for the canvas-drawn header
+        frame_later = Frame(
+            self.margin, self.margin,
+            content_w, content_h - HEADER_RESERVE,
+            id='later',
+        )
+
+        template_p1 = PageTemplate(
+            id='FirstPage',
+            frames=[frame_p1],
+            onPage=self._add_header_footer,
+        )
+        template_later = PageTemplate(
+            id='LaterPages',
+            frames=[frame_later],
+            onPage=self._add_later_page_header,
+        )
+
+        doc = BaseDocTemplate(
             str(filepath),
             pagesize=letter,
             leftMargin=self.margin,
             rightMargin=self.margin,
             topMargin=self.margin,
-            bottomMargin=self.margin
+            bottomMargin=self.margin,
         )
-        
+        doc.addPageTemplates([template_p1, template_later])
+
         # Build content
         story = []
-        
+
         # Page 1: Account Summary
         story.extend(self._build_page1(statement))
-        
-        # Page 2+: Transaction History
+
+        # Switch to the later-pages template, then page-break
+        story.append(NextPageTemplate('LaterPages'))
         story.append(PageBreak())
         story.extend(self._build_transaction_pages(statement))
-        
-        # Build PDF
-        doc.build(story, onFirstPage=self._add_header_footer, 
-                  onLaterPages=self._add_header_footer)
-        
+
+        doc.build(story)
+
         return str(filepath)
     
     def _build_page1(self, statement: BankStatement) -> List:
@@ -535,15 +572,62 @@ class StatementPDFGenerator:
         return elements
     
     def _add_header_footer(self, canvas_obj: canvas.Canvas, doc):
-        """Add header and footer to each page."""
+        """Add header and footer to each page (page 1 only, via onFirstPage)."""
         canvas_obj.saveState()
-        
-        # Footer with Wells Fargo logo on right
+        canvas_obj.restoreState()
+
+    def _add_later_page_header(self, canvas_obj: canvas.Canvas, doc):
+        """Draw the date / page-number header and logo on pages 2+."""
+        canvas_obj.saveState()
+
+        statement = getattr(self, '_current_statement', None)
         page_num = doc.page
-        
-        # Add page header for pages after first
-        if page_num > 1:
-            # This is handled by the table header repeat
-            pass
-        
+
+        # --- Date and page indicator (top-left) ---
+        if statement is not None:
+            date_str = statement.period.end_date.strftime('%B %d, %Y')
+            page_str = f"{date_str}  \u25a0  Page {page_num} of {statement.page_count}"
+        else:
+            page_str = f"Page {page_num}"
+
+        canvas_obj.setFont('Helvetica', 8)
+        canvas_obj.setFillColor(colors.black)
+        canvas_obj.drawString(
+            self.margin,
+            self.page_height - self.margin - 10,
+            page_str,
+        )
+
+        # --- Wells Fargo logo (top-right) ---
+        logo_w = 1.1 * inch
+        logo_h = 0.60 * inch
+        logo_x = self.page_width - self.margin - logo_w
+        logo_y = self.page_height - self.margin - logo_h
+
+        if self.logo_path.exists():
+            canvas_obj.drawImage(
+                str(self.logo_path),
+                logo_x, logo_y,
+                width=logo_w, height=logo_h,
+                preserveAspectRatio=True,
+                anchor='ne',
+            )
+        else:
+            # Fallback: red box with "WELLS FARGO" text
+            canvas_obj.setFillColor(WF_RED)
+            canvas_obj.rect(logo_x, logo_y, logo_w, logo_h, fill=1, stroke=0)
+            canvas_obj.setFillColor(colors.white)
+            canvas_obj.setFont('Helvetica-Bold', 8)
+            canvas_obj.drawCentredString(
+                logo_x + logo_w / 2,
+                logo_y + logo_h / 2 - 4,
+                'WELLS FARGO',
+            )
+
+        # --- Horizontal rule below header ---
+        rule_y = self.page_height - self.margin - logo_h - 4
+        canvas_obj.setStrokeColor(colors.black)
+        canvas_obj.setLineWidth(1.0)
+        canvas_obj.line(self.margin, rule_y, self.page_width - self.margin, rule_y)
+
         canvas_obj.restoreState()
