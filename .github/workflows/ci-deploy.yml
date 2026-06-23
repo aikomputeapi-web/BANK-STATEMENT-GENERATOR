@@ -60,30 +60,13 @@ jobs:
         run: echo "IMAGE=$IMAGE_NAME:${{ github.sha }}" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy
+    name: Deploy (via SnapDeploy GitHub Integration)
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (for provider configs)
-        uses: actions/checkout@v4
-
-      - name: "Deploy: SnapDeploy"
-        env:
-          SNAPDEPLOY_API_KEY: ${{ secrets.SNAPDEPLOY_API_KEY }}
+      - name: Notify SnapDeploy
         run: |
-          if [ -z "${SNAPDEPLOY_API_KEY}" ]; then
-            echo "SNAPDEPLOY_API_KEY not set; skipping SnapDeploy deploy"
-            exit 0
-          fi
-
-          echo "Installing SnapDeploy CLI..."
-          npm install -g snapdeploy
-
-          echo "Logging in to SnapDeploy..."
-          snapdeploy login --token "${SNAPDEPLOY_API_KEY}"
-
-          echo "Deploying application to SnapDeploy..."
-          snapdeploy deploy --repo "${GITHUB_REPOSITORY}" --branch "${GITHUB_REF#refs/heads/}" --env production
-
-      - name: Finish
-        run: echo "Deployment job finished"
+          echo "SnapDeploy deployment is triggered via GitHub integration."
+          echo "Ensure your SnapDeploy project is connected to this repository."
+          echo "Pushes to main branch will trigger automatic deployment."
+          echo "Check your SnapDeploy dashboard for deployment status and logs."
