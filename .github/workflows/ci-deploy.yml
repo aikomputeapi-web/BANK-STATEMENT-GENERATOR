@@ -58,7 +58,7 @@ jobs:
       - name: Checkout (for provider configs)
         uses: actions/checkout@v4
 
-      - name: Deploy: Railway (example)
+      - name: "Deploy: Railway (example)"
         if: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           echo "Deploying to Railway (example)"
@@ -72,7 +72,7 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
 
-      - name: Deploy: Fly.io (example)
+      - name: "Deploy: Fly.io (example)"
         if: ${{ secrets.FLY_API_TOKEN }}
         run: |
           echo "Deploying to Fly"
@@ -84,7 +84,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Deploy: Render (example)
+      - name: "Deploy: Render (example)"
         if: ${{ secrets.RENDER_API_KEY }}
         run: |
           echo "Deploy to Render via API (example)"
@@ -98,7 +98,7 @@ jobs:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE: ${{ secrets.RENDER_SERVICE }}
 
-      - name: Deploy: Zeabur (webhook)
+      - name: "Deploy: Zeabur (webhook)"
         if: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
         run: |
           echo "Triggering Zeabur deploy via webhook"
@@ -107,6 +107,33 @@ jobs:
             -d '{"image":"'"${{ env.IMAGE_NAME }}":"'${{ github.sha }}'"}'
         env:
           ZEA_DEPLOY_WEBHOOK: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
+
+      - name: "Deploy: Zeabur (CLI)"
+        if: ${{ secrets.ZEA_API_KEY && secrets.ZEA_SERVICE }}
+        run: |
+          echo "Installing Zeabur CLI (attempt)"
+          npm i -g zeabur || npm i -g @zeabur/cli || true
+          if command -v zeabur >/dev/null 2>&1; then
+            echo "Zeabur CLI installed: $(zeabur --version || true)"
+            echo "Logging in to Zeabur"
+            zeabur login --token "${{ secrets.ZEA_API_KEY }}" || true
+            echo "Creating or updating service '${{ secrets.ZEA_SERVICE }}'"
+            zeabur service create --name "${{ secrets.ZEA_SERVICE }}" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" || true
+            echo "Deploying image to Zeabur"
+            zeabur service deploy --name "${{ secrets.ZEA_SERVICE }}" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" || true
+          else
+            echo "Zeabur CLI not found; attempting API webhook fallback"
+            # Fallback: if user provided a webhook, trigger it
+            if [ -n "${{ secrets.ZEA_DEPLOY_WEBHOOK }}" ]; then
+              curl -sS -X POST "${{ secrets.ZEA_DEPLOY_WEBHOOK }}" -H "Content-Type: application/json" -d '{"image":"'"${{ env.IMAGE_NAME }}":"'${{ github.sha }}'"}'
+            else
+              echo "No Zeabur CLI or webhook available; please configure Zeabur integration in UI or provide ZEA_DEPLOY_WEBHOOK."
+              exit 1
+            fi
+          fi
+        env:
+          ZEA_API_KEY: ${{ secrets.ZEA_API_KEY }}
+          ZEA_SERVICE: ${{ secrets.ZEA_SERVICE }}
 
       - name: Finish
         run: echo "Deployment job finished (no-op if no provider secrets set)"
