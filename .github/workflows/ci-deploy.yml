@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 env:
-  IMAGE_NAME: ghcr.io/${{ toLower(github.repository) }}
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -37,6 +37,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase IMAGE_NAME for GHCR
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: |
+          echo "Lowercasing IMAGE_NAME for GHCR"
+          IMAGE_LOWER=$(echo "${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=${IMAGE_LOWER}" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v4
