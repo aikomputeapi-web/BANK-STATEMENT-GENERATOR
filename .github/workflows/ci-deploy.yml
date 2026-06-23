@@ -1,0 +1,107 @@
+name: CI — Build & Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Set image output
+        run: echo "IMAGE=$IMAGE_NAME:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy (provider-specific)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for provider configs)
+        uses: actions/checkout@v4
+
+      - name: Deploy: Railway (example)
+        if: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Deploying to Railway (example)"
+          # Option A: Use Railway GitHub integration (recommended):
+          #  - Connect GitHub repo in Railway UI and let Railway build & deploy automatically.
+          # Option B: Use the CLI here if you prefer (uncomment and set RAILWAY_TOKEN secret):
+          # npm i -g railway
+          # echo "$RAILWAY_TOKEN" | railway login --token
+          # railway up --service "$RAILWAY_SERVICE" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+
+      - name: Deploy: Fly.io (example)
+        if: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          echo "Deploying to Fly"
+          curl -L https://fly.io/install.sh | sh
+          export FLYCTL_INSTALL="${HOME}/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+          flyctl auth token ${{ secrets.FLY_API_TOKEN }} || true
+          flyctl deploy --image ${{ env.IMAGE_NAME }}:${{ github.sha }} --app ${{ secrets.FLY_APP }} --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy: Render (example)
+        if: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          echo "Deploy to Render via API (example)"
+          # Example: create a new service or trigger a manual deploy via Render API using your service id and API key.
+          # curl -X POST \
+          #  -H "Authorization: Bearer $RENDER_API_KEY" \
+          #  -H "Content-Type: application/json" \
+          #  https://api.render.com/v1/services/$RENDER_SERVICE/deploys \
+          #  -d '{"type":"manual","image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"}'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE: ${{ secrets.RENDER_SERVICE }}
+
+      - name: Deploy: Zeabur (webhook)
+        if: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
+        run: |
+          echo "Triggering Zeabur deploy via webhook"
+          curl -sS -X POST "${{ secrets.ZEA_DEPLOY_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{"image":"'"${{ env.IMAGE_NAME }}":"'${{ github.sha }}'"}'
+        env:
+          ZEA_DEPLOY_WEBHOOK: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
+
+      - name: Finish
+        run: echo "Deployment job finished (no-op if no provider secrets set)"
