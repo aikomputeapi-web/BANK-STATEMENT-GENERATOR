@@ -149,7 +149,7 @@ jobs:
           else
             echo "Zeabur CLI not found; attempting API webhook fallback"
             if [ -n "${ZEA_DEPLOY_WEBHOOK}" ]; then
-              curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"'"${{ env.IMAGE_NAME }}":"'${{ github.sha }}'"}'
+              curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"'
             else
               echo "No Zeabur CLI or webhook available; please configure Zeabur integration in UI or provide ZEA_DEPLOY_WEBHOOK."
               exit 1
