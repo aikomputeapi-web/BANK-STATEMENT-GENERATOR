@@ -123,7 +123,7 @@ jobs:
             echo "ZEA_DEPLOY_WEBHOOK not set; skipping Zeabur webhook deploy"
           else
             echo "Triggering Zeabur deploy via webhook"
-            curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"'"${{ env.IMAGE_NAME }}":"'${{ github.sha }}'"}'
+            curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"'
           fi
 
       - name: "Deploy: Zeabur (CLI)"
