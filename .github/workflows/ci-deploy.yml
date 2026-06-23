@@ -60,101 +60,30 @@ jobs:
         run: echo "IMAGE=$IMAGE_NAME:${{ github.sha }}" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy (provider-specific)
+    name: Deploy
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (for provider configs)
         uses: actions/checkout@v4
 
-      - name: "Deploy: Railway (example)"
+      - name: "Deploy: SnapDeploy"
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          SNAPDEPLOY_API_KEY: ${{ secrets.SNAPDEPLOY_API_KEY }}
         run: |
-          if [ -z "${RAILWAY_TOKEN}" ]; then
-            echo "RAILWAY_TOKEN not set; skipping Railway deploy"
-          else
-            echo "Deploying to Railway (example)"
-            # Uncomment CLI flow if you want to deploy via CLI
-            # npm i -g railway
-            # echo "$RAILWAY_TOKEN" | railway login --token
-            # railway up --service "$RAILWAY_SERVICE" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          fi
-
-      - name: "Deploy: Fly.io (example)"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_APP: ${{ secrets.FLY_APP }}
-        run: |
-          if [ -z "${FLY_API_TOKEN}" ]; then
-            echo "FLY_API_TOKEN not set; skipping Fly deploy"
-          else
-            echo "Deploying to Fly"
-            curl -L https://fly.io/install.sh | sh
-            export FLYCTL_INSTALL="${HOME}/.fly"
-            export PATH="$FLYCTL_INSTALL/bin:$PATH"
-            flyctl auth token ${FLY_API_TOKEN} || true
-            flyctl deploy --image ${IMAGE_NAME}:${{ github.sha }} --app ${FLY_APP} --remote-only
-          fi
-
-      - name: "Deploy: Render (example)"
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE: ${{ secrets.RENDER_SERVICE }}
-        run: |
-          if [ -z "${RENDER_API_KEY}" ]; then
-            echo "RENDER_API_KEY not set; skipping Render deploy"
-          else
-            echo "Deploy to Render via API (example)"
-            # Example: trigger a manual deploy via Render API using service id and API key.
-            # curl -X POST \
-            #  -H "Authorization: Bearer ${RENDER_API_KEY}" \
-            #  -H "Content-Type: application/json" \
-            #  https://api.render.com/v1/services/${RENDER_SERVICE}/deploys \
-            #  -d '{"type":"manual","image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"}'
-          fi
-
-      - name: "Deploy: Zeabur (webhook)"
-        env:
-          ZEA_DEPLOY_WEBHOOK: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
-        run: |
-          if [ -z "${ZEA_DEPLOY_WEBHOOK}" ]; then
-            echo "ZEA_DEPLOY_WEBHOOK not set; skipping Zeabur webhook deploy"
-          else
-            echo "Triggering Zeabur deploy via webhook"
-            curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"'
-          fi
-
-      - name: "Deploy: Zeabur (CLI)"
-        env:
-          ZEA_API_KEY: ${{ secrets.ZEA_API_KEY }}
-          ZEA_SERVICE: ${{ secrets.ZEA_SERVICE }}
-          ZEA_DEPLOY_WEBHOOK: ${{ secrets.ZEA_DEPLOY_WEBHOOK }}
-        run: |
-          if [ -z "${ZEA_API_KEY}" ] || [ -z "${ZEA_SERVICE}" ]; then
-            echo "ZEA_API_KEY or ZEA_SERVICE not set; skipping Zeabur CLI deploy"
+          if [ -z "${SNAPDEPLOY_API_KEY}" ]; then
+            echo "SNAPDEPLOY_API_KEY not set; skipping SnapDeploy deploy"
             exit 0
           fi
-          echo "Installing Zeabur CLI (attempt)"
-          npm i -g zeabur || npm i -g @zeabur/cli || true
-          if command -v zeabur >/dev/null 2>&1; then
-            echo "Zeabur CLI installed: $(zeabur --version || true)"
-            echo "Logging in to Zeabur"
-            zeabur login --token "${ZEA_API_KEY}" || true
-            echo "Creating or updating service '${ZEA_SERVICE}'"
-            zeabur service create --name "${ZEA_SERVICE}" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" || true
-            echo "Deploying image to Zeabur"
-            zeabur service deploy --name "${ZEA_SERVICE}" --image "${{ env.IMAGE_NAME }}:${{ github.sha }}" || true
-          else
-            echo "Zeabur CLI not found; attempting API webhook fallback"
-            if [ -n "${ZEA_DEPLOY_WEBHOOK}" ]; then
-              curl -sS -X POST "${ZEA_DEPLOY_WEBHOOK}" -H "Content-Type: application/json" -d '{"image":"${{ env.IMAGE_NAME }}:${{ github.sha }}"'
-            else
-              echo "No Zeabur CLI or webhook available; please configure Zeabur integration in UI or provide ZEA_DEPLOY_WEBHOOK."
-              exit 1
-            fi
-          fi
+
+          echo "Installing SnapDeploy CLI..."
+          npm install -g snapdeploy
+
+          echo "Logging in to SnapDeploy..."
+          snapdeploy login --token "${SNAPDEPLOY_API_KEY}"
+
+          echo "Deploying application to SnapDeploy..."
+          snapdeploy deploy --repo "${GITHUB_REPOSITORY}" --branch "${GITHUB_REF#refs/heads/}" --env production
 
       - name: Finish
-        run: echo "Deployment job finished (no-op if no provider secrets set)"
+        run: echo "Deployment job finished"
